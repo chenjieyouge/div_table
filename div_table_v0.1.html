@@ -273,10 +273,10 @@
           // 对齐
           if (col.align) {
             cell.style.justifyContent =
-              col.aligin === 'right'
-                ? 'flex-end'
-                : col.aligin === 'center'
-                ? center
+              col.align === 'center'
+                ? 'center'
+                : col.align === 'right'
+                ? 'right'
                 : 'flex-start'
           }
 
@@ -388,20 +388,19 @@
           state.wrapper.appendChild(createRow({ name: '合计' }, 'summary'))
         }
 
-        // 加载第一页
-        const page0 = await config.fetchPage(0)
+        // 加载第一页时, 将首页数据和总计行数据都一并加载出来
+        const [page0, summary] = await Promise.all([
+          config.fetchPage(0),
+          config.showSummary ? config.fetchSummary() : Promise.resolve(null),
+        ])
+
         state.totalRows = page0.total
         // 缓存起来并整体渲染一把
         state.pageCache.set(0, page0.data)
+        state.summaryRowData = summary
+
+        updateSummaryDisplay()
         renderVisiblePages()
-
-        // 加载汇总数据
-        if (config.showSummary) {
-          const summary = await config.fetchSummary()
-          state.summaryRowData = summary
-          updateSummaryDisplay()
-        }
-
         updatePageIndicator(0, 0)
       }
 
