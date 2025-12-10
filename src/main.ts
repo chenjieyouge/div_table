@@ -99,7 +99,7 @@ class VirtualTable {
   private pageCache = new Map<number, Record<string, any>[]>() // 缓存页面, 仅数据
   private loadingPagePromises = new Map<
     number,
-    Promise<Record<string, any>>[]
+    Promise<Record<string, any>[]>
   >()
   private visibleRows = new Set<number>() // 可视区 + 缓冲区的行, 动态增删
 
@@ -163,8 +163,8 @@ class VirtualTable {
 
     // container -> wrapper -> headerRow -> summaryRow -> dataRow
     const headerRow = this.createRow('header')
-    console.log('h', headerRow)
     this.headerElement.appendChild(headerRow)
+    console.log(this.headerElement)
     this.wrapper.appendChild(this.headerElement)
 
     // summary
@@ -197,100 +197,210 @@ class VirtualTable {
       ?.appendChild(this.scrollContainer)
   }
 
-  createRow(rowIndexOrType: number | 'header' | 'summary') {
-    // 根据传入的是表头行, 总结行, 普通数据行 分别渲染
-    let isHeader = false
-    let isSummary = false
-    let actualRowIndex = null
-
-    switch (rowIndexOrType) {
-      case 'header':
-        isHeader = true
-        break
-      case 'summary':
-        isSummary = true
-        break
-      default:
-        actualRowIndex = rowIndexOrType
-    }
-
-    let height = 0
-    if (isHeader) {
-      height = this.config.headerHeight ?? this.config.rowHeight
-      console.log('2', height)
-    } else if (isSummary) {
-      height = this.config.summaryHeight ?? this.config.rowHeight
-    } else {
-      height = this.config.rowHeight
-    }
-
+  private createHeaderRow(): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'table-row'
-    row.style.height = `${height}px`
+    row.style.height = `${this.config.headerHeight}px`
 
-    // 关键! 给数据行加 dataset 行索引; <div data-row-index="123"></div>
-    if (!isHeader && !isSummary) {
-      row.dataset.rowIndex = actualRowIndex!.toString() // 非空断言
-      row.innerHTML = ''
-    }
-
-    // 渲染单元格
     let leftOffset = 0
     this.config.columns.forEach((col, index) => {
       const cell = document.createElement('div')
       cell.className = 'table-cell'
       cell.style.width = `${col.width}px`
-
-      // 处理冻结列
+      // 计算 leftOffset 来作为冻结列 sticky-left 值
       if (index < this.config.frozenColumns) {
         cell.classList.add('cell-frozen')
         cell.style.left = `${leftOffset}px`
       }
 
-      // 内容填充: 若为表头和合计行, 立刻填充
-      if (isHeader) {
-        cell.textContent = col.title
-      } else if (isSummary) {
-        // 假设 summaryData 已存在
-        cell.textContent = this.summaryData?.[col.key] ?? ''
-      } else {
-        // 数据行: 骨架屏 + 异步加载
-        cell.classList.add('skeleton')
-        cell.textContent = ''
-      }
+      cell.textContent = col.title // 字段中文名称
+      // 关键! 假设每列的宽度分别是 100px, 80px, 60px, 则冻结前两列为 100 + 80 = 180px
+      leftOffset += col.width
+      row.append(cell) // append 相比 appendChild 更灵活, 但返回 undifined
+    })
+    return row
+  }
 
+  private createSummaryRow(): HTMLDivElement {
+    const row = document.createElement('div')
+    row.className = 'table-row'
+    row.style.height = `${this.config.summaryHeight}px`
+
+    let leftOffset = 0
+    this.config.columns.forEach((col, index) => {
+      const cell = document.createElement('div')
+      cell.className = 'table-cell'
+      cell.style.width = `${col.width}px`
+      if (index < this.config.frozenColumns) {
+        cell.classList.add('cell-frozen')
+        cell.style.left = `${leftOffset}px`
+      }
+      // 与表头区别在于这里要取, 对应字段的值
+      cell.textContent =
+        this.summaryData?.[col.key] ?? (index === 0 ? '合计' : '')
       leftOffset += col.width
       row.append(cell)
     })
 
-    // 数据来啦, 则异步加载真实数据
-    if (!isHeader && !isSummary) {
-      this.getRowData(actualRowIndex).then((data) => {
-        // 1. 先找到对应的行: 可能存在或者移除
-        const existingRow = this.virtualContent.querySelector(
-          `[data-row-index="${actualRowIndex}"]`
-        )
-        // 被滚动移除了就不填了
-        if (!existingRow || !existingRow.isConnected) {
-          return
-        }
+    return row
+  }
 
-        // 找到了行, 就开始填充数据
-        const cells = existingRow.querySelectorAll('.table-cell')
-        cells.forEach((cell, idx) => {
-          cell.classList.remove('skeleton') // 去掉之前的骨架屏占位
-          const col = this.config.columns[idx]
-          cell.textContent = data[col.key] ?? '' // 填上真实数据
-        })
+  private createDataRow(rowIndex: number): HTMLDivElement {
+    const row = document.createElement('div')
+    row.className = 'table-row'
+    row.style.height = `${this.config.rowHeight}px`
+    row.dataset.rowIndex = rowIndex.toString() // 标记每行数据, 是虚拟滚动查找基础
+
+    // 先渲染骨架屏 (loading)
+    let leftOffset = 0
+    this.config.columns.forEach((col, index) => {
+      const cell = document.createElement('div')
+      cell.className = 'table-cell skeleton'
+      cell.style.width = `${col.width}px`
+
+      if (index < this.config.frozenColumns) {
+        cell.classList.add('cell-frozen')
+        cell.style.left = `${leftOffset}px`
+      }
+      cell.textContent = '' //先清空, 等数据加载出来填上
+      leftOffset += col.width
+      row.append(cell)
+    })
+
+    // 异步加载数据并更新 DOM
+    this.getRowData(rowIndex).then((data) => {
+      // 防止数据在返回前 DOM 已被删了 (用户滚动过快), 容器若不在了, 还渲染毛线
+      const existingRow = this.virtualContent.querySelector(
+        `[data-row-index="${rowIndex}"]`
+      )
+      if (!existingRow || !existingRow.isConnected) {
+        return
+      }
+
+      // 容器还在, 那该行就挨个单元格渲染
+      const cells = existingRow.querySelectorAll('.table-cell')
+      cells.forEach((cell, idx) => {
+        // 先移除骨架屏效果, 然后将真实数据替上去
+        cell.classList.remove('skeleton')
+        const col = this.config.columns[idx]
+        cell.textContent = data[col.key] ?? ''
       })
-    }
+    })
 
     return row
   }
 
+  private createRow(rowIndexOrType: number | 'header' | 'summary') {
+    if (typeof rowIndexOrType === 'number') {
+      return this.createDataRow(rowIndexOrType)
+    }
+
+    if (rowIndexOrType === 'header') {
+      return this.createHeaderRow()
+    }
+
+    if (rowIndexOrType === 'summary') {
+      return this.createSummaryRow()
+    }
+
+    throw new Error(`输入的数据类型错误: ${rowIndexOrType}`)
+  }
+
+  // createRow(rowIndexOrType: number | 'header' | 'summary') {
+  //   // 根据传入的是表头行, 总结行, 普通数据行 分别渲染
+  //   let isHeader = false
+  //   let isSummary = false
+  //   let actualRowIndex = null
+
+  //   switch (rowIndexOrType) {
+  //     case 'header':
+  //       isHeader = true
+  //       break
+  //     case 'summary':
+  //       isSummary = true
+  //       break
+  //     default:
+  //       actualRowIndex = rowIndexOrType
+  //   }
+
+  //   let height = 0
+  //   if (isHeader) {
+  //     height = this.config.headerHeight ?? this.config.rowHeight
+  //     console.log('2', height)
+  //   } else if (isSummary) {
+  //     height = this.config.summaryHeight ?? this.config.rowHeight
+  //   } else {
+  //     height = this.config.rowHeight
+  //   }
+
+  //   const row = document.createElement('div')
+  //   row.className = 'table-row'
+  //   row.style.height = `${height}px`
+
+  //   // 关键! 给数据行加 dataset 行索引; <div data-row-index="123"></div>
+  //   if (!isHeader && !isSummary) {
+  //     row.dataset.rowIndex = actualRowIndex!.toString() // 非空断言
+  //     row.innerHTML = ''
+  //   }
+
+  //   // 渲染单元格
+  //   let leftOffset = 0
+  //   this.config.columns.forEach((col, index) => {
+  //     const cell = document.createElement('div')
+  //     cell.className = 'table-cell'
+  //     cell.style.width = `${col.width}px`
+
+  //     // 处理冻结列
+  //     if (index < this.config.frozenColumns) {
+  //       cell.classList.add('cell-frozen')
+  //       cell.style.left = `${leftOffset}px`
+  //     }
+
+  //     // 内容填充: 若为表头和合计行, 立刻填充
+  //     if (isHeader) {
+  //       cell.textContent = col.title
+  //     } else if (isSummary) {
+  //       // 假设 summaryData 已存在
+  //       cell.textContent = this.summaryData?.[col.key] ?? ''
+  //     } else {
+  //       // 数据行: 骨架屏 + 异步加载
+  //       cell.classList.add('skeleton')
+  //       cell.textContent = ''
+  //     }
+
+  //     leftOffset += col.width
+  //     row.append(cell)
+  //   })
+
+  //   // 数据来啦, 则异步加载真实数据
+  //   if (!isHeader && !isSummary) {
+  //     this.getRowData(actualRowIndex).then((data) => {
+  //       // 1. 先找到对应的行: 可能存在或者移除
+  //       const existingRow = this.virtualContent.querySelector(
+  //         `[data-row-index="${actualRowIndex}"]`
+  //       )
+  //       // 被滚动移除了就不填了
+  //       if (!existingRow || !existingRow.isConnected) {
+  //         return
+  //       }
+
+  //       // 找到了行, 就开始填充数据
+  //       const cells = existingRow.querySelectorAll('.table-cell')
+  //       cells.forEach((cell, idx) => {
+  //         cell.classList.remove('skeleton') // 去掉之前的骨架屏占位
+  //         const col = this.config.columns[idx]
+  //         cell.textContent = data[col.key] ?? '' // 填上真实数据
+  //       })
+  //     })
+  //   }
+
+  //   return row
+  // }
+
   // 获取行数据, 根据行索引
   // 行号 88, 每页 200,  则为 88 / 200 = 0 页, 偏移 88 % 200 = 88
   // 行号 999, 每页 200, 则为 999 / 200 = 4 页, 偏移 999 % 200 = 199
+
   async getRowData(rowIndex: number) {
     const { pageSize } = this.config // 每页多少条数据
     const pageIndex = Math.floor(rowIndex / pageSize)
@@ -312,8 +422,8 @@ class VirtualTable {
           // 控制缓存页面队列动态平衡, 超过设置的阈值, 则清理掉队列头部的
           // new -> {1: data, 2: data, 10: data} => {2: data, ..., nnew}
           if (this.pageCache.size > this.config.maxCachedPages) {
-            // Map 的 keys 迭代器是有顺序的, 轻松找到第一个删掉
-            const firstKey = this.pageCache.keys().next().value
+            // Map 的 keys 迭代器是有顺序的, 轻松找到第一个删掉; ! 表示一定有值
+            const firstKey = this.pageCache.keys().next().value!
             this.pageCache.delete(firstKey)
           }
           //console.log('rows', rows)
@@ -321,7 +431,7 @@ class VirtualTable {
         })
         .catch((err) => {
           this.loadingPagePromises.delete(pageIndex)
-          return []
+          return [] as Record<string, any>[] // 明确告诉 ts 这时空对象数组
         })
 
       this.loadingPagePromises.set(pageIndex, promise)
@@ -334,6 +444,18 @@ class VirtualTable {
   }
 
   async loadSummary() {
+    // 这个方法是可选的, 因此要做防御性检查
+    if (!this.summaryRow) return
+
+    if (!this.config.fetchSummaryData) {
+      // 渲染默认值
+      const cells = this.summaryRow.querySelectorAll('.table-cell')
+      cells.forEach((cell, idx) => {
+        cell.textContent = idx === 0 ? '合计' : ''
+      })
+      return
+    }
+
     try {
       const data = await this.config.fetchSummaryData()
       const cells = this.summaryRow.querySelectorAll('.table-cell')
@@ -349,14 +471,14 @@ class VirtualTable {
   // 虚拟滚动-渲染可视区 + 附近缓冲区 的行, 其他数据均不创建 DOM
   // 已创建的行, 滚出视野则删掉, 还在则复用不重建
   renderVisibleRows(start: number, end: number) {
-    const newVisibleSet = new Set() // 记录本次应显示哪些行号
+    const newVisibleSet = new Set<number>() // 记录本次应显示哪些行号
     const fragment = document.createDocumentFragment()
 
     for (let rowId = start; rowId <= end; rowId++) {
       newVisibleSet.add(rowId)
       // 1. 若已存在且渲染过, 则复用, 并更新 top 位置
       if (this.visibleRows.has(rowId)) {
-        const row = this.virtualContent.querySelector(
+        const row = this.virtualContent.querySelector<HTMLDivElement>(
           `[data-row-index="${rowId}"]`
         )
 
@@ -390,6 +512,7 @@ class VirtualTable {
     }
 
     // 5. 更新当前显示为最新的行
+    // TODO: 后续性能优化为用 diff 算法, 增量更新, 而非全替换!
     this.visibleRows = newVisibleSet
   }
 
@@ -448,17 +571,18 @@ class VirtualTable {
 
   // 绑定滚动事件
   bindEvents() {
-    let rafId = null // 初始化变量存 帧ID
+    let rafId: number | null = null // 初始化变量存 帧ID
     this.scrollContainer.addEventListener(
       'scroll',
       () => {
-        if (rafId) {
+        if (rafId !== null) {
           // 若用户还在疯狂滚动, 则不管上一帧, 存最后状态
           cancelAnimationFrame(rafId)
         }
         // 在浏览器执行下一帧之前, 先去更新表格, 这样就很流畅
         rafId = requestAnimationFrame(() => {
           this.updateVisibleRows()
+          rafId = null // 执行完重置
         })
       },
       { passive: true }

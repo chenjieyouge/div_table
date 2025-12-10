@@ -3,6 +3,10 @@
 Thumbs.db
 *.tmp
 cj.txt
+test.html
+test.js
+test.ts
+
 
 # node_modules
 node_modules/
