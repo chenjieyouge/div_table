@@ -4,18 +4,34 @@ import { IConfig } from '@/types'
 
 // 剥离数据逻辑, 支持 mock / api 切换
 export class DataManager {
+  private config: IConfig
   private pageCache = new Map<number, Record<string, any>[]>()
   private loadingPromises = new Map<number, Promise<Record<string, any>[]>>()
-  private config: IConfig
   private summaryData: Record<string, any> | null = null
+
+  // 全量数据 + 原始备份 (用于筛选后还原)
+  private fullData: Record<string, any>[] | null = null
+  private originalFullData: Record<string, any>[] | null = null // 筛选/排序等用
 
   constructor(config: IConfig) {
     this.config = config
   }
 
-  // 缓存整页数据
-  cachePage(pageIndex: number, data: Record<string, any>[]) {
+  // 缓存整页数据-后端分页
+  public cachePage(pageIndex: number, data: Record<string, any>[]) {
     this.pageCache.set(pageIndex, data)
+  }
+
+  // 缓存全量数据 (同时保存原始副本)
+  public cacheFullData(data: Record<string, any>[]) {
+    this.fullData = [...data] // 浅拷贝
+    this.originalFullData = [...data]
+    this.pageCache.clear() // 清理分页缓存
+  }
+
+  // 获取全量长度, 拥有更新 totalRows
+  public getFullDataLength(): number {
+    return this.fullData?.length || 0
   }
 
   // 异步: 获取某页数据 (带防重, 缓存)
@@ -31,6 +47,7 @@ export class DataManager {
     }
 
     // 若该页面, 既没在当前请求中, 也没在缓存中, 则请求后端数据
+    if (!this.config.fetchPageData) return []
     const promise = this.config
       .fetchPageData(pageIndex)
       .then((res) => {
@@ -58,6 +75,16 @@ export class DataManager {
   // 同步: 仅从缓存中读取某行, 不触发网络请求
   // 假设要获取第 88行数据, 每页20条, 则坐标为: (88 / 20) -> 第4页 + (88 % 20)-> 8 位
   getRowData(rowIndex: number): Record<string, any> | undefined {
+    if (rowIndex < 0 || !this.config.totalRows) {
+      return undefined
+    }
+
+    // 内存模式下, 直接走索引
+    if (this.fullData) {
+      return this.fullData[rowIndex]
+    }
+
+    // 分页模式, 原有逻辑
     const { pageSize } = this.config // 分页配置的, 每页加载多少条
     const pageIndex = Math.floor(rowIndex / this.config.pageSize) // 数据在第几页
     const offset = rowIndex % pageSize
@@ -83,6 +110,35 @@ export class DataManager {
       console.error('Failed to load summary: ' + err)
       return null
     }
+  }
+
+  // 客户端排序 (仅内存模式用)
+  public sortData(sortKey: string, direction: 'asc' | 'desc') {
+    if (!this.fullData) return
+
+    // sort(() => n): n
+    this.fullData.sort((a, b) => {
+      const aVal = a[sortKey]
+      const bVal = b[sortKey]
+
+      // 处理 null / undefined
+      if (aVal == null && bVal == null) return 0
+      if (aVal == null) return 1
+      if (bVal == null) return -1
+
+      if (aVal < bVal) return direction === 'asc' ? -1 : 1
+      if (aVal > bVal) return direction === 'asc' ? 1 : -1
+      return 0
+    })
+
+    this.pageCache.clear() // 排序后, 清除数据缓存
+  }
+
+  // 客户端筛选 (仅内存模式用)
+  public filterData(predicate: (row: Record<string, any>) => boolean): void {
+    if (!this.originalFullData) return
+    this.fullData = this.originalFullData.filter(predicate)
+    this.pageCache.clear()
   }
 
   // 重置或者测试用

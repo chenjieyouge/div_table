@@ -37,6 +37,7 @@ function generateRow(rowIndex: number) {
     name: `员工${(rowIndex + 1).toLocaleString()}`,
     dept: ['市场部', '销售部', '生产部'][rowIndex % 3],
     region: ['华南', '华东', '华北'][rowIndex % 3],
+    product: ['AI智能手机', 'AI学习平板', 'AI眼镜'][rowIndex % 3],
     sales: `¥${(5 + Math.random() * 20).toFixed(1)}万`,
     cost: `¥${(2 + Math.random() * 10).toFixed(1)}万`,
     profit: `¥${(1 + Math.random() * 10).toFixed(1)}万`,

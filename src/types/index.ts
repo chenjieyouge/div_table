@@ -1,3 +1,10 @@
+// 拓展排序, 筛选参数
+export interface SortFilterParmas {
+  sortField?: string
+  sortOrer?: 'asc' | 'desc'
+  filterText: string
+}
+
 // 标准分页响应
 export interface IPageResponse<T = Record<string, any>> {
   list: T[]
@@ -8,7 +15,7 @@ export interface IPageResponse<T = Record<string, any>> {
 export interface ITableCallbacks {
   // 可视区页面变化时触发
   onPageChange?: (info: IPageInfo) => void
-
+  onModeChange?: (mode: 'client' | 'server') => void
   // TODO: 添加更多回调
   // onSortChange?: ...
   // onFilterChange?: ...
@@ -45,16 +52,29 @@ export interface IUserConfig {
 
   columns: IColumn[] // 用户必填
 
-  fetchPageData(pageIndex: number): Promise<IPageResponse>
+  fetchPageData?(pageIndex: number): Promise<IPageResponse>
   fetchSummaryData?(): Promise<Record<string, any>>
+
+  initialData?: Record<string, any>[] // 全量数据
+  fetchAllData?: () => Promise<Record<string, any>[]>
 }
 
 // 对内: 使用严格完整配置
-// 注意: 回调函数保持可选, 因为它们也不是 "必需配置"
+// 注意: 回调函数保持可选, 因为它们也不是 "必需配置", 可选都放在 Omit 中
 // IConfig 让所有 IUserConfig 变成必填, 除 (fetchSummaryData)
 export interface IConfig
   extends Required<
-      Omit<IUserConfig, 'fetchSummaryData' | keyof ITableCallbacks>
+      Omit<
+        IUserConfig,
+        | 'fetchSummaryData'
+        | 'fetchPageData'
+        | 'initialData'
+        | 'fetchAllData'
+        | keyof ITableCallbacks
+      >
     >,
-    Pick<IUserConfig, 'fetchSummaryData'>,
+    Pick<
+      IUserConfig,
+      'fetchSummaryData' | 'fetchPageData' | 'initialData' | 'fetchAllData'
+    >,
     ITableCallbacks {}

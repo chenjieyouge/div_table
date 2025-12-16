@@ -50,7 +50,7 @@
         padding: 4px;
         display: flex;
         align-items: center;
-        font-size: 13px;
+        font-size: 16px;
       }
 
       .data-container {
@@ -81,7 +81,13 @@
   </head>
   <body>
     <h2>千万数据分页虚拟滚动</h2>
-    <div id="container"></div>
+    <h3>内存模式 3w 行测试</h3>
+    <button id="sort-small">按销售额排序</button>
+    <div>111</div>
+    <div id="table-small"></div>
+
+    <h3>分页模式 100w 行测试</h3>
+    <div id="table-large"></div>
     <div class="page-indicator" id="page-indicator">加载中...</div>
     <script type="module" src="./src/main.ts"></script>
   </body>

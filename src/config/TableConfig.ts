@@ -1,6 +1,9 @@
 import { IUserConfig, IConfig } from '@/types'
 
-type MyDefault = Omit<IConfig, 'columns' | 'fetchPageData' | 'fetchSummaryData'>
+type MyDefault = Omit<
+  IConfig,
+  'columns' | 'fetchPageData' | 'fetchSummaryData' | 'initialData'
+>
 
 const DEFAULTS: MyDefault = {
   container: '#container',

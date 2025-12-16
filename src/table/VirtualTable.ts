@@ -1,3 +1,4 @@
+import { CLIENT_SIDE_MAX_ROWS } from '@/config/Constant'
 import { TableConfig } from '@/config/TableConfig'
 import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
@@ -8,6 +9,8 @@ import { caculatePageRange } from '@/utils/pageUtils'
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
+
+  private mode: 'client' | 'server' = 'server' // 走全量还是走分页
 
   private dataManager: DataManager
   private renderer: DOMRenderer
@@ -35,18 +38,65 @@ export class VirtualTable {
 
   // 异步初始化
   private async initializeAsync() {
-    // 请求第一页数据, 获取 totalRows
-    const firstResponse = await this.config.fetchPageData(0)
-    const totalRows = firstResponse.totalRows
-    const firstPageList = firstResponse.list
-    // 更新 config 补充上 totalRows 的值
+    let totalRows: number
+    let firstPageList: Record<string, any>[]
+
+    if (this.config.initialData) {
+      // 用户传了, 全量数据, 用索引获取第一页数据
+      totalRows = this.config.initialData.length
+      firstPageList = this.config.initialData.slice(0, this.config.pageSize)
+    } else {
+      // 走分页接口, 获取第一页数据
+      if (!this.config.fetchPageData) return []
+      const res = await this.config.fetchPageData(0)
+      totalRows = res.totalRows
+      firstPageList = res.list
+    }
+
+    // 智能决策模式, 根据数据量大小, 选走内存模式, 还是大数据模式
+    if (totalRows <= CLIENT_SIDE_MAX_ROWS) {
+      this.mode = 'client'
+      console.log('[VirtualTable] choose all in mode')
+      // 注入全量数据
+      if (this.config.initialData) {
+        this.dataManager.cacheFullData(this.config.initialData)
+      } else {
+        // 需要拉全量, 用循环分页作为兜底方案
+        const allData = await this.loadAllDataByPaging(totalRows)
+        this.dataManager.cachePage(0, firstPageList)
+      }
+    } else {
+      this.mode = 'server'
+      console.log('[VirtualTable] choose pagination mode')
+      this.dataManager.cachePage(0, firstPageList)
+    }
+
+    // 统一全局更新 totalRows 防止状态混乱造成滚你滚动卡屏
     this.config.totalRows = totalRows
-    // 缓存第一页数据
-    this.dataManager.cachePage(0, firstPageList)
     // 始终虚拟滚动模式, 坚决不降智, 否则得维护两套代码
     this.createVirtualDOM()
     this.bindScrollEvents()
     this.updateVisibleRows()
+
+    // 通知外部,模式的变化(可选)
+    this.config.onModeChange?.(this.mode)
+  }
+
+  // 兜底: 通过多次分页请求加载全量数据, 优化浏览器来处理, 用户体验更流畅呀
+  private async loadAllDataByPaging(
+    totalRows: number
+  ): Promise<Record<string, any>[]> {
+    const allData: Record<string, any>[] = []
+    const totalPages = Math.ceil(totalRows / this.config.pageSize)
+
+    for (let page = 0; page < totalPages; page++) {
+      if (!this.config.fetchPageData) {
+        return []
+      }
+      const res = await this.config.fetchPageData(page)
+      allData.push(...res.list)
+    }
+    return allData
   }
 
   private createVirtualDOM() {
@@ -150,7 +200,6 @@ export class VirtualTable {
     // 计算可视行范围 [startRow, endRow] 及内容高, translateY 等信息
     const { startRow, endRow, translateY, contentHeight } =
       this.scroller.getScrollInfo(scrollTop, viewportHeight)
-
     // 拓展: 记录页码更新
     const pageInfo = caculatePageRange(
       startRow,
@@ -171,8 +220,10 @@ export class VirtualTable {
     for (let rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
       // 若该行不在就先渲染骨架屏
       newVisibleSet.add(rowIndex)
+
       if (!this.visibleRows.has(rowIndex)) {
         const rowEl = this.renderer.createSkeletonRow(rowIndex)
+
         // eg. 行高 20px, 第一行: 0px, 第二行 20px, 第三行高, 40px ...
         rowEl.style.top = `${(rowIndex - startRow) * this.config.rowHeight}px`
         rowEl.dataset.rowIndex = String(rowIndex)
@@ -244,6 +295,67 @@ export class VirtualTable {
   public async refreshSummary() {
     if (this.config.showSummary) {
       await this.loadSummaryData()
+    }
+  }
+
+  // 刷新表格 (不重建 DOM)
+  private refreshTable() {
+    // 重新计算滚动区高度
+    const dataContainer = this.scrollContainer.querySelector(
+      '.data-container'
+    ) as HTMLDivElement
+
+    // 先更新滚动容器高度
+    if (dataContainer) {
+      dataContainer.style.height = `${this.scroller.getActualScrollHeight}px`
+    }
+    // 再移除所有已存在的行元素
+    // for (const rowEl of this.rowElementMap.values()) {
+    //   rowEl.remove()
+    // }
+
+    // 先批量处理得了, 应该不会有内存泄露
+    if (this.virtualContent) {
+      this.virtualContent.replaceChildren()
+    }
+
+    // 再清空当前渲染状态, 和缓存
+    this.visibleRows.clear()
+    this.rowElementMap.clear()
+    // 重新渲染可见行
+    this.updateVisibleRows()
+  }
+
+  // 对外暴露: 是否为客户端模式
+  public get isClientMode(): boolean {
+    return this.mode === 'client'
+  }
+
+  // 排序入口 (当前仅内存模式实现了)
+  public sort(sortKey: string, direction: 'asc' | 'desc') {
+    if (this.mode === 'client') {
+      this.dataManager.sortData(sortKey, direction)
+      this.refreshTable() // 排序完就刷新表格, 原始数据还存了一份其实(浅拷贝)
+    } else {
+      // TOTO: 分页模式, 得加钱
+      console.warn('pagination mode need backend and add money')
+    }
+  }
+
+  // 筛选入口
+  public filter(filterText: string) {
+    if (this.mode === 'client') {
+      this.dataManager.filterData((row) =>
+        Object.values(row).some((val) =>
+          String(val).toLowerCase().includes(filterText.toLowerCase())
+        )
+      )
+      // 更新 totalRows
+      this.config.totalRows = this.dataManager.getFullDataLength()
+      this.refreshTable() // 刷新表格数据
+    } else {
+      // TOTO: 分页模式, 得加钱
+      console.warn('pagination mode need backend and add money')
     }
   }
 
