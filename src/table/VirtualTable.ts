@@ -3,7 +3,6 @@ import { DataManager } from '@/data/DataManager'
 import { DOMRenderer } from '@/dom/DOMRenderer'
 import { VirtualScroller } from '@/scroll/VirtualScroller'
 import type { IConfig, ITableQuery, IUserConfig } from '@/types'
-import { SortState } from '@/table/core/SortState'
 import { HeaderSortBinder } from '@/table/interaction/HeaderSortBinder'
 import { bootstrapTable } from '@/table/data/bootstrapTable'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
@@ -24,7 +23,6 @@ export class VirtualTable {
   private shell!: ITableShell
 
   private mode: 'client' | 'server' = 'server' // 走全量还是走分页
-  private sortState: SortState = new SortState()
   private headerSortBinder = new HeaderSortBinder()
   private serverQuery: ITableQuery = { filterText: '' } // 默认 server 空筛选
   private clientFilterText = '' // client 下清空筛选排序后恢复原样
@@ -104,6 +102,10 @@ export class VirtualTable {
       },
       onNeedLoadSummary: (summaryRow) => {
         this.loadSummaryData(summaryRow).catch(console.warn)
+      }, 
+      onColumnResizeEnd: (key, width) => {
+        // 列宽变化写入 state, 并触发 rebuild (当前是暴力重建策略)
+        this.store.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width}})
       }
     })
 

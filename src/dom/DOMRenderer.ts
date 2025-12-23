@@ -80,11 +80,18 @@ export class DOMRenderer {
       if (type === 'header') {
         cell.classList.add('header-cell')
         cell.textContent = col.title
-        // 表头的排序样式
+        // 所有表头都要有 columnKey (列拖拽/列宽都要依赖它)
+        cell.dataset.columnKey = col.key
+        // 只有 sortable 列才标记排序, HeaderSortBinder 也只认这个
         if (col.sortable) {
           cell.dataset.sortable = 'true'
-          cell.dataset.columnKey = col.key
         }
+        // 列宽拖拽手表 (不引入第三方, 纯原生 dom)
+        const handle = document.createElement('div')
+        handle.className = 'col-resize-handle'
+        handle.dataset.columnKey = col.key
+        cell.appendChild(handle)
+
       } else if (type === 'summary') {
         cell.textContent = data?.[col.key] ?? (index === 0 ? '合计' : '')
       } else {

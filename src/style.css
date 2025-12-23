@@ -18,11 +18,38 @@
 }
 
 .header-cell {
+  position: relative;
+  user-select: none;
+
   background-color: #f8f9fa;
   font-weight: bold;
   /* 这个 bug 搞了我好久 !!! 一定要设置行高 */
   height: var(--header-height, 30px)
 }
+
+.col-resize-handle {
+  /* 列宽拖拽手柄, 放在表头单元格最右侧 */
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  cursor: col-resize;
+  width: 2px;
+  /* background-color: red; */
+}
+
+.col-resize-guide {
+  /* 拖拽时显示竖线辅助线, 视觉反馈, 等 mouseup 才真正 dispatch */
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background-color: red;
+  height: 100%; /* 这个 100% 是针对整个表格吗 */
+  pointer-events: none;
+  z-index: 999;
+}
+
+
 
 /* 可排序表头交互 */
 .header-cell[data-sortable='true'] {

@@ -4,6 +4,7 @@ import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { HeaderSortBinder } from "@/table/interaction/HeaderSortBinder";
 import { ScrollBinder } from "@/table/interaction/ScrollBinder";
 import { SortIndicatorView } from "@/table/interaction/SortIndicatorView";
+import { ColumnResizeBinder } from "@/table/interaction/ColumnResizeBinder";
 
 
 export interface ITableShell {
@@ -23,8 +24,10 @@ export function mountTableShell(params: {
   headerSortBinder: HeaderSortBinder
   onToggleSort: (key: string) => void 
   onNeedLoadSummary?: (summaryRow: HTMLDivElement) => void
+  onColumnResizeEnd?: (key: string, width: number) => void  // 列宽拖拽结束后回调
 }): ITableShell {
-  const { config, renderer, headerSortBinder, onToggleSort, onNeedLoadSummary } = params
+
+  const { config, renderer, headerSortBinder, onToggleSort, onNeedLoadSummary, onColumnResizeEnd } = params
   // 1. 创建大容器 scrollContainer
   const scrollContainer = getContainer(config.container)
   // 设置大容器的固定宽高, 样式等
@@ -37,7 +40,19 @@ export function mountTableShell(params: {
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
   const headerRow = renderer.createHeaderRow()
+  // 绑定排序按钮
   headerSortBinder.bind(headerRow, (key) => onToggleSort(key))
+  // 绑定列拖拽
+  const resizeBinder = new ColumnResizeBinder()
+  if (onColumnResizeEnd) {
+    resizeBinder.bind({
+      scrollContainer,
+      headerRow,
+      onResizeEnd: onColumnResizeEnd,
+      minWidth: 50 // 字段宽度拖拽后, 不能低于 30px, 看不清了
+    })
+  }
+
   tableWrapper.appendChild(headerRow)
 
   // 3. 总结行
@@ -82,6 +97,7 @@ export function mountTableShell(params: {
       headerSortBinder.unbind(headerRow) // 清理表头事件
       scrollBinder.unbind(scrollContainer) // 清理滚动事件
       scrollContainer.innerHTML = '' // 清理容器
+      resizeBinder.unbind(headerRow) // 释放列宽拖拽事件
     }
   }
 }

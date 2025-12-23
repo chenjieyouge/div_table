@@ -118,5 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
     tableLarge.filter(input.value.trim())
   })
 
+  // 列顺序, 冻结列数
+  setTimeout(() => {
+    tableLarge.dispatch({
+      type: 'FROZEN_COUNT_SET',
+      payload: { count: 2 }
+    })
+  }, 1000);
+
   // test-end ============
 })
