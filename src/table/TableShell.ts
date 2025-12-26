@@ -3,9 +3,11 @@ import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { HeaderSortBinder } from "@/table/interaction/HeaderSortBinder";
 import { ScrollBinder } from "@/table/interaction/ScrollBinder";
+
 import { SortIndicatorView } from "@/table/interaction/SortIndicatorView";
 import { ColumnResizeBinder } from "@/table/interaction/ColumnResizeBinder";
 import { ColumnDragBinder } from "@/table/interaction/ColumnDragBinder";
+import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
 
 
 export interface ITableShell {
@@ -25,8 +27,14 @@ export function mountTableShell(params: {
   headerSortBinder: HeaderSortBinder
   onToggleSort: (key: string) => void 
   onNeedLoadSummary?: (summaryRow: HTMLDivElement) => void
+
   onColumnResizeEnd?: (key: string, width: number) => void  // 列宽拖拽结束后回调
-  onColumnOrderChange?: (order: string[]) => void    // 拓展列顺序后回调
+  onColumnOrderChange?: (order: string[]) => void    // 拖拽列顺序后回调
+
+  onColumnFilterChange?: (key: string, values: string[]) => void  // 列筛选值回调
+  getFilterOptions?: (key: string) => Promise<string[]> // 筛选配置
+  getCurrentFilter?: (key: string) => string[]
+
 }): ITableShell {
 
   const { 
@@ -36,7 +44,11 @@ export function mountTableShell(params: {
     onToggleSort, 
     onNeedLoadSummary, 
     onColumnResizeEnd, 
-    onColumnOrderChange } = params
+    onColumnOrderChange,
+    onColumnFilterChange,
+    getFilterOptions,
+    getCurrentFilter,
+   } = params
 
 
   // 1. 创建大容器 scrollContainer
@@ -72,6 +84,18 @@ export function mountTableShell(params: {
       scrollContainer,
       headerRow,
       onOrderChange: onColumnOrderChange
+    })
+  }
+
+  // 绑定列值筛选下来弹窗
+  const filterBinder = new ColumnFilterBinder()
+  if (onColumnFilterChange && getFilterOptions && getCurrentFilter) {
+    filterBinder.bind({
+      scrollContainer,
+      headerRow,
+      onFilterChange: onColumnFilterChange,
+      getFilterOptions,
+      getCurrentFilter,
     })
   }
 
@@ -123,6 +147,7 @@ export function mountTableShell(params: {
       scrollContainer.innerHTML = '' // 清理容器
       resizeBinder.unbind(headerRow) // 释放列宽拖拽事件
       dragBinder.unbind(headerRow) // 释放列拖拽改顺序字段
+      filterBinder.unbind()  // 释放列值筛选
     }
   }
 }

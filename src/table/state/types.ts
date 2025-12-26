@@ -10,6 +10,7 @@ export interface TableState {
     query: ITableQuery // 当前 serverQuery, 未来拓展列级别的过滤, 类似飞书表格
     clientFilterText: string // client下, 全局关键字搜索
     sort: SortValue  // 排序三态:  desc->asc-null
+    columnFilters: Record<string, string[]> // 列值筛选, 列 key -> 已选值数组
   }
   // 列域状态: 当前只做顺序, 冻结前 N 列, 宽度覆写, 不做隐藏列
   columns: {
@@ -26,7 +27,9 @@ export type TableAction =
   | { type: 'SET_FILTER_TEXT'; payload: { text: string }}
   | { type: 'CLEAR_FILTER_TEXT' } // 清空筛选
   | { type: 'SORT_TOGGLE'; payload: { key: string }}
-  | { type: 'SORT_SET'; payload: { sort: SortValue }}
-  | { type: 'COLUMN_ORDER_SET'; payload: { order: string[]} }
-  | { type: 'COLUMN_WIDTH_SET'; payload: { key: string; width: number }}
-  | { type: 'FROZEN_COUNT_SET'; payload: { count: number }}
+  | { type: 'SORT_SET'; payload: { sort: SortValue }} // 列值排序
+  | { type: 'COLUMN_ORDER_SET'; payload: { order: string[]} }  // 设置列顺序
+  | { type: 'COLUMN_WIDTH_SET'; payload: { key: string; width: number }}  // 设置列宽
+  | { type: 'FROZEN_COUNT_SET'; payload: { count: number }}  // 冻结前 N 列设置
+  | { type: 'COLUMN_FILTER_SET'; payload: { key: string; values: string[] } } // 列值筛选
+  | { type: 'COLUMN_FILTER_CLEAR'; payload: { key: string } } // 清空筛选

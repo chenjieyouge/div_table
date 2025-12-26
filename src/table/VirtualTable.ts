@@ -110,7 +110,29 @@ export class VirtualTable {
       onColumnOrderChange: (order) => {
         // 列顺序变化写入 state, 并触发 rebuild (当前是暴力重建策略)
         this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order }})
+      },
+      onColumnFilterChange: (key, values) => {
+        // 列值筛选写入 state, 并触发 rebuild (当前是暴力重建策略)
+        if (values.length === 0) {
+          this.store.dispatch({type: 'COLUMN_FILTER_CLEAR', payload: {key} })
+        } else {
+          this.store.dispatch({ type: 'COLUMN_FILTER_SET', payload: {key, values } })
+        }
+      },
+      getFilterOptions: async (key) => {
+        // client 模式 从 originalFullData 推导出可选值 (topN 避免百万次枚举)
+        if (this.mode === 'client') {
+          return this.getClientFilterOptions(key)
+        }
+        // server 模式暂时返回空 (后续可接 fetchFilterOptions 接口)
+        console.warn('todo: server mode need add money')
+        return []
+      },
+      getCurrentFilter: (key) => {
+        return this.store.getState().data.columnFilters[key] ?? []
       }
+
+
     })
 
     // 首次挂载后, 就立刻同步一次滚动高度
@@ -209,9 +231,10 @@ export class VirtualTable {
   private async applyClientState(state: TableState) {
     const filterText: string = state.data.clientFilterText ?? ''
     const sort = state.data.sort 
+    const columnFilters = state.data.columnFilters ?? {}
     // 先恢复 原始顺序 + 应用筛选, 保证可回到自然顺序
     this.clientFilterText = filterText
-    this.dataManager.resetClientOrder(filterText) // 恢复为原始顺序,考虑了筛选动作
+    this.dataManager.resetClientOrder({ filterText, columnFilters }) // 恢复为原始顺序,考虑了筛选动作
     // 若有排序, 则再处理
     if (sort) {
       this.dataManager.sortData(sort.key, sort.direction)
@@ -224,6 +247,21 @@ export class VirtualTable {
     this.shell.setScrollHeight(this.scroller)
     this.viewport.refresh()
     await this.refreshSummary() // 总结行也可能刷新
+  }
+
+  // client 模式下, 推导列可选值 (topN 或全量去重, 避免百万枚举卡死)
+  private getClientFilterOptions(key: string): string[] {
+    const fullData= (this.dataManager as any).originalFullData as Record<string, any>[] | null 
+    if (!fullData) return []
+
+    const valSet = new Set<string>()
+    const limit = 1000 // 最多取前 1000 个不同值, 避免卡顿
+    for (const row of fullData) {
+      if (valSet.size >= limit) break 
+      const val = String(row[key] ?? '')
+      if (val) valSet.add(val)
+    }
+    return Array.from(valSet).sort() // Array.from 和 [...] 谁性能高?
   }
 
   // 暴力重建 (列变化时用), 最稳但性能不行, 后续里程碑在优化为局部更新

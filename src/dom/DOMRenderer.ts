@@ -92,6 +92,13 @@ export class DOMRenderer {
         handle.dataset.columnKey = col.key
         cell.appendChild(handle)
 
+        // 列值筛选按钮 (所有列都可以筛选, 后续可加 filterable 配置)
+        const filterBtn = document.createElement('div')
+        filterBtn.className = 'col-filter-btn'
+        filterBtn.dataset.columnKey = col.key
+        filterBtn.textContent = '🔽'
+        cell.appendChild(filterBtn)
+
       } else if (type === 'summary') {
         cell.textContent = data?.[col.key] ?? (index === 0 ? '合计' : '')
       } else {

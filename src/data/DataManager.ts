@@ -40,7 +40,16 @@ export class DataManager {
     const sortKey = q.sortKey ?? ''
     const sortDirection = q.sortDirection ?? ''
     const filterText = (q.filterText ?? '').toLowerCase()
-    return `${sortKey}:${sortDirection}|f=${filterText}` // ":" 和 "|" 是自定义分隔符
+    // 序列化 columnFilters (保证顺序稳定, 避免缓存 key 混乱)
+    let filterStr = ''
+    if (q.columnFilters && Object.keys(q.columnFilters).length > 0) {
+      const sorted = Object.keys(q.columnFilters).sort()
+      filterStr = sorted
+        .map(k => `${k}:[${q.columnFilters![k].sort().join(',')}]`)
+        .join('|')
+    }
+
+    return `${sortKey}:${sortDirection}|f=${filterText}|cf=${filterStr}` // ":" 和 "|" 是自定义分隔符
   }
 
   private getPageCacheKey(pageIndex: number, query?: ITableQuery) {
@@ -169,26 +178,65 @@ export class DataManager {
     this.pageCache.clear() // 排序后, 清除数据缓存
   }
 
-  // 客户端筛选 (仅内存模式用)
-  public filterData(predicate: (row: Record<string, any>) => boolean): void {
-    if (!this.originalFullData) return
-    this.fullData = this.originalFullData.filter(predicate)
+  // client 筛选 (仅内存模式用), 支持全局文本 + 列值筛选
+  public filterData(params: {
+    globalText?: string 
+    columnFilters?: Record<string, string[]>
+
+  }): void {
+    if (!this.originalFullData) return 
+    const { globalText = '', columnFilters = {}} = params
+    this.fullData = this.originalFullData.filter((row) => {
+      // 全局文本筛选
+      if (globalText) {
+        const match = Object.values(row).some((val) => 
+        String(val).toLowerCase().includes(globalText.toLowerCase()))
+        if (!match) return false
+      }
+
+      // 列值筛选, 任一列不匹配就排除
+      for (const key in columnFilters) {
+        const selected = columnFilters[key]
+        if (selected.length === 0) continue 
+        const cellVal = String(row[key] ?? '')
+        if (!selected.includes(cellVal)) return false 
+      }
+      return true 
+    })
     this.pageCache.clear()
   }
 
-  public resetClientOrder(filterText: string) {
+  public resetClientOrder(params: {
+    filterText?: string 
+    columnFilters?: Record<string, string[]>
+  }) {
     // 恢复 client 模式下的 "自然顺序", 否则用户第三次点击排序字段无法复原
     if (!this.originalFullData) return 
+    
+    const { filterText = '', columnFilters = {} } = params
     const kw = (filterText ?? '').trim().toLowerCase()
-    if (!kw) {
-      // 无筛选, 则回原始数据顺序, (量大可能回有性能问题呀)
-      this.fullData = [...this.originalFullData]
+    const hasColFilter = Object.keys(columnFilters).length > 0  // 是否有筛选, 等下也要还原筛选状态
+
+    // 若无筛选, 则会原始数据数据顺序即可
+    if (!kw && !hasColFilter) {
+      this.fullData = [...this.originalFullData] // 不确定是否有性能问题
     } else {
-      // 有筛选, 则恢复为, 原始状态下的筛选结果
-      this.fullData = this.originalFullData.filter((row) => {
-        Object.values(row).some((val) => 
-          String(val).toLowerCase().includes(kw)
-        )
+      // 有筛选, 则恢复为原始状态下的筛选结果, 遍历每行
+      this.fullData = this.originalFullData.filter(row => {
+        if (kw) {
+          const match = Object.values(row).some(val => 
+            String(val).toLowerCase().includes(kw)
+          )
+          if (!match) return false
+        }
+        // 遍历每行的每个单元格去判断
+        for (const key in columnFilters) {
+          const selected = columnFilters[key]
+          if (selected.length === 0) continue 
+          const cellVal = String(row[key] ?? '')
+          if (!selected.includes(cellVal)) return false
+        }
+        return true 
       })
     }
     this.pageCache.clear()

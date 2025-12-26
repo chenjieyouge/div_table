@@ -15,6 +15,7 @@ export function createTableStore(params: {
   frozenCount: number 
   initialState?: Partial<TableState> // 外部传入的初始 state
   onStateChange?: StateListener // 状态变化回调, 这时库对外的关键能力
+
 }): TableStore {
 
   const { columns, mode, frozenCount, initialState, onStateChange } = params
@@ -25,6 +26,7 @@ export function createTableStore(params: {
       query: { filterText: '' },
       clientFilterText: '',
       sort: null,
+      columnFilters: {}, // 初始无筛选
     },
     columns: {
       order: columns.map((c) => c.key),
@@ -139,6 +141,27 @@ export function createTableStore(params: {
 
       case 'FROZEN_COUNT_SET': {
         return { ...prev, columns: { ...prev.columns, frozenCount: action.payload.count }}
+      }
+
+      case 'COLUMN_FILTER_SET': {
+        const { key, values } = action.payload
+        const nextFilters = { ...prev.data.columnFilters, [key]: values }
+        const nextQuery: ITableQuery = { ...prev.data.query, columnFilters: nextFilters }
+        return {
+          ...prev,
+          data: { ...prev.data, columnFilters: nextFilters, query: nextQuery },
+        }
+      }
+
+      case 'COLUMN_FILTER_CLEAR': {
+        const { key } = action.payload
+        const nextFilters = { ...prev.data.columnFilters }
+        delete nextFilters[key]
+        const nextQuery: ITableQuery = { ...prev.data.query, columnFilters: nextFilters }
+        return {
+          ...prev,
+          data: { ...prev.data, columnFilters: nextFilters, query: nextQuery }
+        }
       }
 
       default:

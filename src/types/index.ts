@@ -11,6 +11,7 @@ export interface ITableQuery {
   sortKey?: string // 排序字段名 key
   sortDirection?: 'asc' | 'desc'
   filterText?: string // 模糊搜索关键词
+  columnFilters?: Record<string, string[]> // 列值筛选 (key -> 选中的数组)
 }
 
 // 标准分页响应

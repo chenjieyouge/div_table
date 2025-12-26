@@ -121,6 +121,63 @@
   font-size: 12px;
 }
 
+/* 筛选按钮和弹层样式 */
+.col-filter-btn {
+  /* 筛选按钮, 放在表头单元格右上角 */
+  position: absolute;
+  top: 2px;
+  right: 10px;
+  width: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  user-select: none;
+}
+
+.col-filter-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+}
+
+.col-filter-popup {
+  /* 筛选弹层 */
+  position: absolute;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  max-height: 300px;
+  min-width: 150px;
+  overflow-y: auto;
+  z-index: 999;
+  border-radius: 10px;
+}
+
+.filter-option {
+  display: block;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.filter-option input {
+  margin-right: 6px;
+}
+
+.filter-popup-footer {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.filter-btn-ok,
+.filter-btn-clear {
+  flex: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+
 /* 测试面板样式, 不然有点丑 */
 #server-test-panel {
   display: flex;
@@ -134,4 +191,6 @@
   padding: 0 8px;
   width: 220px;
 }
+
+
 
