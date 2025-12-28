@@ -86,19 +86,22 @@ export class DOMRenderer {
         if (col.sortable) {
           cell.dataset.sortable = 'true'
         }
-        // 列宽拖拽手表 (不引入第三方, 纯原生 dom)
+        // 列宽拖拽手柄 (不引入第三方, 纯原生 dom)
         const handle = document.createElement('div')
         handle.className = 'col-resize-handle'
         handle.dataset.columnKey = col.key
         cell.appendChild(handle)
 
-        // 列值筛选按钮 (所有列都可以筛选, 后续可加 filterable 配置)
-        const filterBtn = document.createElement('div')
-        filterBtn.className = 'col-filter-btn'
-        filterBtn.dataset.columnKey = col.key
-        filterBtn.textContent = '🔽'
-        cell.appendChild(filterBtn)
-
+        // 列值筛选按钮 (配置了 filter 且 enabled 才能筛选 )
+        if (col.filter?.enabled) {
+          const filterBtn = document.createElement('div')
+          filterBtn.className = 'col-filter-btn'
+          filterBtn.dataset.columnKey = col.key
+          // 将类型塞到 dataset, binder 可以直接读取
+          filterBtn.dataset.filterType = col.filter.type
+          filterBtn.textContent = '🔽'
+          cell.appendChild(filterBtn)
+        }
       } else if (type === 'summary') {
         cell.textContent = data?.[col.key] ?? (index === 0 ? '合计' : '')
       } else {

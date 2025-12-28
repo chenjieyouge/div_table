@@ -3,10 +3,12 @@ import { VirtualTable } from '@/table/VirtualTable'
 import './style.css'
 import { IPageInfo, ITableQuery } from '@/types'
 import { mockFechPageData, mockFechSummaryData } from '@/utils/mockData'
+import type { IUserConfig } from '@/types'
 
 // ##### 场景01: 小数据 -> 内存模式 ##########
 const smallData = Array.from({ length: 200000 }, (_, i) => ({
   name: `User ${i}`,
+  id: i,
   dept: ['研发', '产品', '运营'][i % 3],
   region: ['华东', '华北', '华南'][i % 3],
   product: `Product-${i % 10}`,
@@ -15,7 +17,7 @@ const smallData = Array.from({ length: 200000 }, (_, i) => ({
   profit: Math.floor(Math.random() * 2000),
 }))
 
-const configSmall = {
+const configSmall: IUserConfig = {
   container: '#table-small',
   tableWidth: 600,
   tableHeight: 500,
@@ -24,8 +26,9 @@ const configSmall = {
   initialData: smallData, // 传全量数据
   columns: [
     { key: 'name', title: '姓名', width: 120 },
-    { key: 'dept', title: '部门', width: 80 },
-    { key: 'region', title: '区域', width: 100 },
+    { key: 'id', title: 'ID', width: 100, filter: { enabled: true, type: 'numberRange'}},
+    { key: 'dept', title: '部门', width: 80, filter: { enabled: true, type: 'text' } },
+    { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },
     { key: 'product', title: '产品', width: 140, sortable: true },
     { key: 'sales', title: '销售额', width: 120, sortable: true },
     { key: 'cost', title: '成本', width: 120, sortable: true },
@@ -34,11 +37,12 @@ const configSmall = {
   onModeChange(mode: 'client' | 'server') {
     // console.log('[小数据表格-内存模式]: ', mode)
   },
-}
+} 
+
 
 // ##### 场景02: 大数据 -> 分页模式 ##########
 const PAGE_SIZE = 200 // 和 mock 表格配置共用
-const configLarge = {
+const configLarge: IUserConfig = {
   container: '#table-large',
   tableWidth: 600,
   tableHeight: 500,
@@ -58,7 +62,7 @@ const configLarge = {
     { key: 'id', title: '原始ID', width: 80 },
     { key: 'name', title: '姓名', width: 150 },
     { key: 'dept', title: '部门', width: 80 },
-    { key: 'region', title: '区域', width: 100 },
+    { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'text'} },
     { key: 'product', title: '产品', width: 140 },
     { key: 'sales', title: '销售额', width: 120, sortable: true },
     { key: 'cost', title: '成本', width: 120 },

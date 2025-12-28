@@ -177,6 +177,43 @@
   cursor: pointer;
 }
 
+/* 文本输入框样式 */
+.filter-text-input {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* 日期输入框格式 */
+.filter-date-input {
+  width: 100%;
+  padding: 6px;
+  margin: 4px 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* 数字输入框格式 */
+.filter-number-iuput {
+  width: 100%;
+  padding: 6px;
+  margin: 4px 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* 弹层内的标签文字 */
+.col-filter-popup > div {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #333;
+}
+
 
 /* 测试面板样式, 不然有点丑 */
 #server-test-panel {

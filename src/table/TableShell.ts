@@ -1,4 +1,4 @@
-import type { IConfig } from "@/types";
+import type { IConfig, ColumnFilterValue } from "@/types";
 import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { HeaderSortBinder } from "@/table/interaction/HeaderSortBinder";
@@ -31,9 +31,9 @@ export function mountTableShell(params: {
   onColumnResizeEnd?: (key: string, width: number) => void  // 列宽拖拽结束后回调
   onColumnOrderChange?: (order: string[]) => void    // 拖拽列顺序后回调
 
-  onColumnFilterChange?: (key: string, values: string[]) => void  // 列筛选值回调
+  onColumnFilterChange?: (key: string, filter: ColumnFilterValue | null ) => void  // 列筛选值回调
   getFilterOptions?: (key: string) => Promise<string[]> // 筛选配置
-  getCurrentFilter?: (key: string) => string[]
+  getCurrentFilter?: (key: string) => ColumnFilterValue | undefined
 
 }): ITableShell {
 

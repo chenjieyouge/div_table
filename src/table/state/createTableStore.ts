@@ -1,4 +1,4 @@
-import type { IColumn, ITableQuery } from "@/types";
+import type { IColumn, ITableQuery, ColumnFilterValue } from "@/types";
 import type { TableAction, TableState, TableMode, SortValue } from "@/table/state/types";
 
 export type StateListener = (next: TableState, prev: TableState, action: TableAction) => void 
@@ -144,8 +144,8 @@ export function createTableStore(params: {
       }
 
       case 'COLUMN_FILTER_SET': {
-        const { key, values } = action.payload
-        const nextFilters = { ...prev.data.columnFilters, [key]: values }
+        const { key, filter } = action.payload
+        const nextFilters = { ...prev.data.columnFilters, [key]: filter }
         const nextQuery: ITableQuery = { ...prev.data.query, columnFilters: nextFilters }
         return {
           ...prev,

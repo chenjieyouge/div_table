@@ -1,3 +1,21 @@
+// 列筛选类型 (目前支持 4 种)
+export type ColumnFilterType = 'set' | 'text' | 'datarange' | 'numberRange'
+
+// 列筛选配置 (控制某列是否筛选, 以及配置类型)
+export interface IColumnFilterConfig {
+  enabled: boolean // 是否允许出现 "筛选" 按钮
+  type: ColumnFilterType // 筛选的列值类型, 决定弹窗层渲染形态和 query 结构
+}
+
+// 列筛选值的联合类型 (统一表达四种筛选)
+export type ColumnFilterValue = 
+  | { kind: 'set', values: string[] }
+  | { kind: 'text', value: string } // 先做 contains, 后扩展 op 
+  | { kind: 'dateRange', start?: string, end?: string } // yyyy-MM-dd
+  | { kind: 'numberRange', min?: number, max?: number }
+
+
+
 // 拓展排序, 筛选参数
 export interface SortFilterParmas {
   sortField?: string
@@ -11,7 +29,7 @@ export interface ITableQuery {
   sortKey?: string // 排序字段名 key
   sortDirection?: 'asc' | 'desc'
   filterText?: string // 模糊搜索关键词
-  columnFilters?: Record<string, string[]> // 列值筛选 (key -> 选中的数组)
+  columnFilters?: Record<string, ColumnFilterValue> // 列值筛选 (key -> 筛选值结构)
 }
 
 // 标准分页响应
@@ -42,10 +60,11 @@ export interface IColumn {
   title: string
   width: number
   sortable?: boolean
+  filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
 }
 
 // 对外: 用户传入的配置 (宽松)
-export interface IUserConfig {
+export interface IUserConfig extends Partial<ITableCallbacks> {
   container?: string
   tableWidth?: number
   tableHeight?: number
@@ -64,6 +83,10 @@ export interface IUserConfig {
 
   fetchPageData?(pageIndex: number, query?: ITableQuery): Promise<IPageResponse>
   fetchSummaryData?(): Promise<Record<string, any>>
+  fetchFilterOptions?: (params: { // server 模式下拉取某列的可选筛选值
+    key: string 
+    query: ITableQuery
+  }) => Promise<string[]>
 
   initialData?: Record<string, any>[] // 全量数据
   fetchAllData?: () => Promise<Record<string, any>[]>
@@ -80,11 +103,12 @@ export interface IConfig
         | 'fetchPageData'
         | 'initialData'
         | 'fetchAllData'
+        | 'fetchFilterOptions'
         | keyof ITableCallbacks
       >
     >,
     Pick<
       IUserConfig,
-      'fetchSummaryData' | 'fetchPageData' | 'initialData' | 'fetchAllData'
+      'fetchSummaryData' | 'fetchPageData' | 'initialData' | 'fetchAllData' | 'fetchFilterOptions'
     >,
     ITableCallbacks {}

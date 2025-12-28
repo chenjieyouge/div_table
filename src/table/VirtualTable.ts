@@ -111,12 +111,12 @@ export class VirtualTable {
         // 列顺序变化写入 state, 并触发 rebuild (当前是暴力重建策略)
         this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order }})
       },
-      onColumnFilterChange: (key, values) => {
-        // 列值筛选写入 state, 并触发 rebuild (当前是暴力重建策略)
-        if (values.length === 0) {
-          this.store.dispatch({type: 'COLUMN_FILTER_CLEAR', payload: {key} })
+      onColumnFilterChange: (key, filter) => {
+        // filter 为 null 则表示清空
+        if (!filter) {
+          this.store.dispatch({type: 'COLUMN_FILTER_CLEAR', payload: { key } })
         } else {
-          this.store.dispatch({ type: 'COLUMN_FILTER_SET', payload: {key, values } })
+          this.store.dispatch({ type: 'COLUMN_FILTER_SET', payload: {key, filter } })
         }
       },
       getFilterOptions: async (key) => {
@@ -124,14 +124,17 @@ export class VirtualTable {
         if (this.mode === 'client') {
           return this.getClientFilterOptions(key)
         }
-        // server 模式暂时返回空 (后续可接 fetchFilterOptions 接口)
-        console.warn('todo: server mode need add money')
+        // server 模式 若用户提供了 fetchFilterOptions 接口, 就去拉
+        if (this.config.fetchFilterOptions) {
+          const query = this.store.getState().data.query 
+          return this.config.fetchFilterOptions({ key, query})
+        }
+        // 未提供或者没有数据, 则返回空数组 (UI 仍可打开, 但没有选项)
         return []
       },
       getCurrentFilter: (key) => {
-        return this.store.getState().data.columnFilters[key] ?? []
+        return this.store.getState().data.columnFilters[key]
       }
-
 
     })
 
@@ -293,7 +296,8 @@ export class VirtualTable {
     this.serverQuery = {
       sortKey: next.sortKey,
       sortDirection: next.sortDirection,
-      filterText: next.filterText ?? ""
+      filterText: next.filterText ?? "",
+      columnFilters: next.columnFilters ?? {}  // server 模式也必须带上列筛选
     }
     // 更新 DataManager 的 query, 缓存也会自动清除
     this.dataManager.setQuery(this.serverQuery)

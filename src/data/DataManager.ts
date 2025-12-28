@@ -1,4 +1,4 @@
-import type { IConfig, ITableQuery } from '@/types'
+import type { IConfig, ITableQuery, ColumnFilterValue } from '@/types'
 
 // 剥离数据逻辑, 支持 mock / api 切换
 export class DataManager {
@@ -24,7 +24,8 @@ export class DataManager {
     this.currentQuery = {
       sortKey: next.sortKey,
       sortDirection: next.sortDirection,
-      filterText: next.filterText ?? ''
+      filterText: next.filterText ?? '',
+      columnFilters: next.columnFilters ?? {} // 缓存 key / fetchPageData 入参都依赖它
     }
     this.clearCache()
   }
@@ -34,22 +35,40 @@ export class DataManager {
     return this.serverTotalRows
   }
 
-  // 手动拼接 queryKey, 避免 JSON.stringify 顺序导致 key 错乱
+  // 手动序列化: 拼接 queryKey, 避免 JSON.stringify 顺序导致 key 错乱
   private getQueryKey(query?: ITableQuery) {
     const q = query ?? this.currentQuery 
     const sortKey = q.sortKey ?? ''
     const sortDirection = q.sortDirection ?? ''
     const filterText = (q.filterText ?? '').toLowerCase()
-    // 序列化 columnFilters (保证顺序稳定, 避免缓存 key 混乱)
+    // 序列化 columnFilters (保证顺序稳定, 支持 set/text/dateRange/numberRange 等类型)
     let filterStr = ''
     if (q.columnFilters && Object.keys(q.columnFilters).length > 0) {
       const sorted = Object.keys(q.columnFilters).sort()
+      //  sorted-item: { kind: 'set', values: string[] }
       filterStr = sorted
-        .map(k => `${k}:[${q.columnFilters![k].sort().join(',')}]`)
-        .join('|')
-    }
+        // .map(k => `${k}:[${q.columnFilters![k].sort().join(',')}]`)
+        .map(k => {
+          const f = q.columnFilters![k]
+          if (f.kind === 'set') {
+            return `${k}:set:[${f.values.sort().join(',')}]`
 
-    return `${sortKey}:${sortDirection}|f=${filterText}|cf=${filterStr}` // ":" 和 "|" 是自定义分隔符
+          } else if (f.kind === 'text') {
+            return `${k}:text:${f.value}`
+
+          } else if (f.kind === 'dateRange') {
+            return `${k}:date:${f.start ?? ''}~${f.end ?? ""}`
+
+          } else if (f.kind === 'numberRange') {
+            return `${k}:num:${f.min ?? ''}~${f.max ?? ''}`
+
+          } // else if 后续有其他值类型也能加
+          return ''
+        })
+        .join('|') // 将数组拼接为字符串, 按照 "|" 分割项
+    }
+    // ":" 和 "|" 是自定义分隔符
+    return `${sortKey}:${sortDirection}|f=${filterText}|cf=${filterStr}` 
   }
 
   private getPageCacheKey(pageIndex: number, query?: ITableQuery) {
@@ -156,7 +175,7 @@ export class DataManager {
     }
   }
 
-  // 客户端排序 (内存模式), sever 端是端在接口就处理好了的
+  // clinet 模式下排序 (内存模式), sever 端是端在接口就处理好了的
   public sortData(sortKey: string, direction: 'asc' | 'desc') {
     if (!this.fullData) return
 
@@ -178,10 +197,10 @@ export class DataManager {
     this.pageCache.clear() // 排序后, 清除数据缓存
   }
 
-  // client 筛选 (仅内存模式用), 支持全局文本 + 列值筛选
+  // client 筛选 (仅内存模式用), 支持 set/text/dateRange/numRange 筛选
   public filterData(params: {
     globalText?: string 
-    columnFilters?: Record<string, string[]>
+    columnFilters?: Record<string, ColumnFilterValue>
 
   }): void {
     if (!this.originalFullData) return 
@@ -194,21 +213,43 @@ export class DataManager {
         if (!match) return false
       }
 
-      // 列值筛选, 任一列不匹配就排除
+      // 列值筛选, 支持 set/text/dateRange/numRange 类型
       for (const key in columnFilters) {
-        const selected = columnFilters[key]
-        if (selected.length === 0) continue 
-        const cellVal = String(row[key] ?? '')
-        if (!selected.includes(cellVal)) return false 
+        const filter = columnFilters[key]
+        const cellVal = row[key]
+        // 按类型分别匹配
+        if (filter.kind === 'set') {
+          if (filter.values.length === 0) continue 
+          if (!filter.values.includes(String(cellVal ?? ''))) return false 
+
+        } else if (filter.kind === 'text') {
+          if (!filter.value) continue
+          if (!String(cellVal ?? '').toLowerCase().includes(filter.value.toLowerCase())) {
+            return false 
+          }
+
+        } else if (filter.kind === 'dateRange') {
+          const dateStr = String(cellVal ?? '') // 日期字符串比较不确定是否对
+          if (filter.start && dateStr < filter.start) return false 
+          if (filter.end && dateStr > filter.end) return false 
+
+        } else if (filter.kind === 'numberRange') {
+          const num = Number(cellVal)
+          if (isNaN(num)) return false 
+          if (filter.min !== undefined && num < filter.min) return false 
+          if (filter.max !== undefined && num > filter.max) return false
+
+        } // else if 未来可能还有其他值类型
       }
-      return true 
+      return true  // 最终返回的就是 boolean 表示是否显示该行
     })
     this.pageCache.clear()
   }
 
+  // client 模式下, 重置排序
   public resetClientOrder(params: {
     filterText?: string 
-    columnFilters?: Record<string, string[]>
+    columnFilters?: Record<string, ColumnFilterValue>
   }) {
     // 恢复 client 模式下的 "自然顺序", 否则用户第三次点击排序字段无法复原
     if (!this.originalFullData) return 
@@ -229,12 +270,33 @@ export class DataManager {
           )
           if (!match) return false
         }
-        // 遍历每行的每个单元格去判断
+        // 遍历每行的每个单元格去判断, 支持 set/text/dateRange/numberRange 等类型
         for (const key in columnFilters) {
-          const selected = columnFilters[key]
-          if (selected.length === 0) continue 
-          const cellVal = String(row[key] ?? '')
-          if (!selected.includes(cellVal)) return false
+          // 和排序部分的逻辑是重复的, 后面可以抽离一个公共方方法
+          const filter = columnFilters[key]
+          const cellVal = row[key]
+
+          if (filter.kind === 'set') {
+            if (filter.values.length === 0) continue
+            if (!filter.values.includes(String(cellVal ?? ''))) return false 
+
+          } else if (filter.kind === 'text') {
+            if (!filter.value) continue
+            if (!String(cellVal ?? '').toLowerCase().includes(filter.value.toLowerCase())) {
+              return false 
+            }
+
+          } else if (filter.kind === 'dateRange') {
+            const dateStr = String(cellVal ?? '') // 字符比较未来可能有问题, 暂时先这样
+            if (filter.start && dateStr < filter.start) return false 
+            if (filter.end && dateStr > filter.end) return false 
+
+          } else if (filter.kind === 'numberRange') {
+            const num = Number(cellVal)
+            if (filter.min !== undefined && num < filter.min) return false 
+            if (filter.max !== undefined && num > filter.max) return false 
+
+          } // else if 未来其他值类型
         }
         return true 
       })
