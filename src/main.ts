@@ -72,7 +72,7 @@ const configLarge: IUserConfig = {
   fetchPageData: async (pageIndex: number, query?: ITableQuery) => {
     // 模拟 100 w 行数据(分页), 并带有 query 交给 mock 做“全局筛选排序后分页"
     // console.log('[fetchPageData] ', { pageIndex, query })
-    return mockFechPageData(pageIndex, PAGE_SIZE, 10_000, query)
+    return mockFechPageData(pageIndex, PAGE_SIZE, 500_000, query)
   },
 
   // mock 下拉框值用, 后续搞个真正接口来测试

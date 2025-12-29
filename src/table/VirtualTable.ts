@@ -294,19 +294,33 @@ export class VirtualTable {
 
   // state 变化后的统一入口 (里程碑A的 "表格骨架核心")
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
-    // 列相关动作 -> 暴力重建 (最稳, 但性能一般)
-    if (
-      action.type === 'COLUMN_ORDER_SET' || 
-      action.type === 'COLUMN_WIDTH_SET' || 
-      action.type === 'FROZEN_COUNT_SET'
-    ) {
+    // 拦截每个动作判断是 increamental update, 还是只能 rebuild
+    if (action.type === 'COLUMN_WIDTH_SET') {
+      // 拖拽列宽调整, 不用 rebuild, 增量更新即可
+      this.applyColumnsFromState()
+      this.shell.updateColumnWidths(this.config.columns)
+      return 
+    }
+
+    if (action.type === 'COLUMN_ORDER_SET') {
+      // 拖拽列顺序调整, 不用 rebuild, 增量更新即可
+      this.applyColumnsFromState()
+      this.shell.updateColumnOrder(this.config.columns)
+      this.viewport.updateColumnOrder(this.config.columns)
+      return 
+    }
+
+    if (action.type === 'FROZEN_COUNT_SET') {
+      // todo: 冻结列调整, 是否也可以增量更新, 这里先暴力重建吧, 这操作比较低频
       this.rebuild()
       return 
     }
+
     // 排序指示器永远以 state 为准
     this.shell?.setSortIndicator(this.store.getState().data.sort)
     // 排序/筛选变化 -> 根据模式触发数据侧更新
     const state = this.store.getState()
+
     if (state.data.mode === 'client') {
       void this.applyClientState(state)
     } else {

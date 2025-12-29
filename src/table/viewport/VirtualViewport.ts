@@ -43,6 +43,26 @@ export class VirtualViewport {
     void this.updateVisibleRowsInternal()
   }
 
+  // 更新列顺序, 给可视区的所有行数据 dom 重排
+  public updateColumnOrder(columns: IConfig['columns']) {
+    const rows = this.virtualContent.querySelectorAll('.table-row')
+    rows.forEach(row => {
+      const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+      const map = new Map<string, HTMLDivElement>()
+      cells.forEach(cell => {
+        const key = cell.dataset.columnKey
+        if (key) map.set(key, cell)
+      })
+
+      row.innerHTML = ''
+      columns.forEach(col => {
+        const cell = map.get(col.key)
+        if (cell) row.appendChild(cell)
+      })
+    })
+  }
+
+
   // 核心调度方法: 计算可简化 -> 创建骨架 -> 加载数据 -> 更新可视区
   private async updateVisibleRowsInternal() {
     // 获取当前滚动位置和可视区高度

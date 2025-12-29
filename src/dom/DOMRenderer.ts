@@ -66,7 +66,10 @@ export class DOMRenderer {
     columns.forEach((col, index) => {
       const cell = document.createElement('div')
       cell.className = 'table-cell'
-      cell.style.width = `${col.width}px`
+      // 单元格宽优先用 css 变量宽, 其次是列宽
+      // 给所有单元格都标记 列 key, 方便重排/按列更新
+      cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+      cell.dataset.columnKey = col.key 
 
       // 处理冻结列
       if (index < this.config.frozenColumns) {
@@ -80,8 +83,6 @@ export class DOMRenderer {
       if (type === 'header') {
         cell.classList.add('header-cell')
         cell.textContent = col.title
-        // 所有表头都要有 columnKey (列拖拽/列宽都要依赖它)
-        cell.dataset.columnKey = col.key
         // 只有 sortable 列才标记排序, HeaderSortBinder 也只认这个
         if (col.sortable) {
           cell.dataset.sortable = 'true'
