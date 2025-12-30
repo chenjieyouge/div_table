@@ -1,16 +1,18 @@
 
-
-
-// 列顺序拖拽, 自由排序
+// 列顺序拖拽, 除冻结列外, 其他列自由排序, 
 export class ColumnDragBinder {
   private onMouseDown: ((e: MouseEvent) => void) | null = null 
+  private frozenColumnCount = 0
 
   public bind(params: {
     scrollContainer: HTMLDivElement
     headerRow: HTMLDivElement
     onOrderChange: (order: string[]) => void
+    frozenColumnCount?: number 
   }) {
-    const { scrollContainer, headerRow, onOrderChange } = params
+    const { scrollContainer, headerRow, onOrderChange, frozenColumnCount = 0 } = params
+
+    this.frozenColumnCount = frozenColumnCount
     this.unbind(headerRow)
 
     // 监听鼠标按下事件
@@ -33,14 +35,17 @@ export class ColumnDragBinder {
       
       const fromIndex = keys.indexOf(fromKey) // 获取准备进行拖拽列的序号
       if (fromIndex < 0) return  
+
       const startX = e.clientX // 鼠标按下时的位置(距离视口)
       let diDrag = false 
+
       // 拖拽辅助线, 复用列宽拖拽辅助线的样式
       let indicator: HTMLDivElement | null = document.createElement('div')
       indicator.className = 'col-resize-guide'
       scrollContainer.appendChild(indicator)
       
       const containerRect = scrollContainer.getBoundingClientRect()
+
       const findInsertIndex = (clientx: number) => {
         const x = clientx
         for (let i = 0; i < cells.length; i++) {
@@ -76,6 +81,14 @@ export class ColumnDragBinder {
         if (!diDrag) return 
         
         const toIndex = findInsertIndex(upEvt.clientX)
+        
+        // 冻结列不让进行拖拽列顺序
+        const isFromFrozen = fromIndex < this.frozenColumnCount
+        const isToFrozen = toIndex < this.frozenColumnCount
+
+        // 不论是别的列拖动到冻结区 或者 冻结区拖向任何区 (包括自己) 都不准动!
+        if (isFromFrozen || isToFrozen) return false
+
         const next = [...keys]
         const [moved] = next.splice(fromIndex, 1)
         next.splice(toIndex, 0, moved)

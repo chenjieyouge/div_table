@@ -82,17 +82,19 @@ export function mountTableShell(params: {
       scrollContainer,
       headerRow,
       onResizeEnd: onColumnResizeEnd,
-      minWidth: 50 // 字段宽度拖拽后, 不能低于 30px, 看不清了
+      minWidth: 50, // 字段宽度拖拽后, 不能低于 30px, 看不清了
+      frozenColumnCount: config.frozenColumns, // 传入冻结前 N 列
     })
   }
 
-  // 绑定列字段顺序拖拽
+  // 绑定列字段顺序拖拽, 冻结列不参与
   const dragBinder = new ColumnDragBinder()
   if (onColumnOrderChange) {
     dragBinder.bind({
       scrollContainer,
       headerRow,
-      onOrderChange: onColumnOrderChange
+      onOrderChange: onColumnOrderChange,
+      frozenColumnCount: config.frozenColumns, // 传入冻结前 N 列
     })
   }
 
@@ -159,10 +161,25 @@ export function mountTableShell(params: {
       scrollBinder.bind(scrollContainer, onRafScroll)
     },
     updateColumnWidths(columns) {
-      // 只更新变量, 不重建 DOM 
+      // 只更新变量, 不重建 DOM, 这个拖拽宽度问题引发了我一系列的崩盘, 为了用户体验值了!
       for (const col of columns) {
         scrollContainer.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
       }
+
+      // 更新 table-wrapper 总宽, 不然会出现列挤压的情况!
+      const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
+      tableWrapper.style.width = `${totalWidth}px`
+
+      // 简单粗暴:直接读取实际渲染宽度,重新设置冻结列 left
+    if (config.frozenColumns > 0) {
+      requestAnimationFrame(() => {
+        updateFrozenLeft(headerRow, config.frozenColumns)
+        const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
+        if (summaryRow) updateFrozenLeft(summaryRow, config.frozenColumns)
+        const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
+        dataRows.forEach(row => updateFrozenLeft(row, config.frozenColumns))
+      })
+    }
     },
     updateColumnOrder(columns) {
       // 重排 header 顺序, 根据传入的新 columns 
@@ -242,3 +259,16 @@ function createTableWrapper(config: IConfig): HTMLDivElement {
   return wrapper
 }
 
+// 最简单的方案:直接读取 DOM 实际宽度
+function updateFrozenLeft(row: HTMLDivElement, frozenCount: number) {
+  if (!row) return
+  const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+  let leftOffset = 0
+  
+  for (let i = 0; i < frozenCount && i < cells.length; i++) {
+    const cell = cells[i]
+    cell.style.left = `${leftOffset}px`
+    // 直接读取实际渲染宽度(包含 border、padding 等)
+    leftOffset += cell.getBoundingClientRect().width
+  }
+}

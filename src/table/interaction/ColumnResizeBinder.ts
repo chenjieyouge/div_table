@@ -1,10 +1,11 @@
-// 拖拽列宽
+// 拖拽列宽, 冻结列不让拖, 影响布局?
 
 export class ColumnResizeBinder {
   private onMouseMove: ((e: MouseEvent) => void) | null = null 
   private onMouseUp: ((e: MouseEvent) => void) | null = null 
   private onMouseDown: ((e: MouseEvent) => void) | null = null 
   private guidEl: HTMLDivElement | null = null 
+  private frozenColumnCount = 0 // 冻结列数量配置
 
   // 只在 mouseup 触发 onResizeEnd, 避免实时响应用户拖拽就 rebuild 导致卡死
   public bind(params: {
@@ -12,21 +13,34 @@ export class ColumnResizeBinder {
     headerRow: HTMLDivElement
     onResizeEnd: (key: string, width: number) => void 
     minWidth?: number
+    frozenColumnCount?: number  // 前 N 列为冻结列
   }) {
-    const { scrollContainer, headerRow, onResizeEnd, minWidth = 40 } = params
+    const { 
+      scrollContainer, 
+      headerRow, 
+      onResizeEnd, 
+      minWidth = 40, 
+      frozenColumnCount = 0
+    } = params
+
+    this.frozenColumnCount = frozenColumnCount // 保存冻结列数量
     this.unbind(headerRow)
+
     // 当鼠标按下时触发
     this.onMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLDivElement | null 
       const handle = target?.closest<HTMLDivElement>('.col-resize-handle')
       if (!handle) return  
-
       // 阻止触发排序 click (HeaderSortBinder 是 click 事件)
       e.preventDefault()
       e.stopPropagation()
 
       const key = handle.dataset.columnKey
       if (!key) return  
+      // 检查是否为冻结列, 是则禁止拖拽
+      if (this.isFrozenColumn(handle)) {
+        return 
+      }
 
       const cell = handle.parentElement as HTMLDivElement | null 
       if (!cell) return 
@@ -63,7 +77,6 @@ export class ColumnResizeBinder {
         // 等 mouseup 才真正提交宽度 -> dispatch -> rebuild
         onResizeEnd(key, nextWidth) // 等外部传进来回调函数
 
-
         // 清理调鼠标事件和辅助线
         this.guidEl?.remove()
         this.guidEl = null 
@@ -97,6 +110,21 @@ export class ColumnResizeBinder {
     }
     this.guidEl?.remove()
     this.guidEl = null 
+  }
+
+  // 判断是否为冻结列 (根据在 headerRow 中的位置)
+  private isFrozenColumn(handle: HTMLDivElement): boolean {
+    if (this.frozenColumnCount === 0) return false 
+
+    const cell = handle.parentElement
+    if (!cell) return false 
+
+    const headerRow = cell.parentElement
+    if (!headerRow) return false 
+
+    const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.header-cell'))
+    const index = cells.indexOf(cell as HTMLDivElement)
+    return index >= 0 && index < this.frozenColumnCount
   }
 
 }
