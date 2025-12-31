@@ -165,7 +165,6 @@ export function mountTableShell(params: {
       for (const col of columns) {
         scrollContainer.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
       }
-
       // 更新 table-wrapper 总宽, 不然会出现列挤压的情况!
       const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
       tableWrapper.style.width = `${totalWidth}px`

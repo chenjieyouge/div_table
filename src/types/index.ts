@@ -66,6 +66,7 @@ export interface IColumn {
 // 对外: 用户传入的配置 (宽松)
 export interface IUserConfig extends Partial<ITableCallbacks> {
   container?: string
+  tableId?: string // 表格的唯一标识, 用于 localstorage 存储
   tableWidth?: number
   tableHeight?: number
   headerHeight?: number
@@ -82,7 +83,7 @@ export interface IUserConfig extends Partial<ITableCallbacks> {
   columns: IColumn[] // 用户必填
 
   fetchPageData?(pageIndex: number, query?: ITableQuery): Promise<IPageResponse>
-  fetchSummaryData?(): Promise<Record<string, any>>
+  fetchSummaryData?(query?: ITableQuery): Promise<Record<string, any>>
   fetchFilterOptions?: (params: { // server 模式下拉取某列的可选筛选值
     key: string 
     query: ITableQuery

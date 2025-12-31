@@ -14,18 +14,17 @@ import type { TableAction, TableState } from '@/table/state/types'
 import type { IColumn } from '@/types'
 import { createTableStore } from '@/table/state/createTableStore'
 import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnModel'
+import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
 export class VirtualTable {
   private config: IConfig // 内部用完整配置
-
   private shell!: ITableShell
-
-  private mode: 'client' | 'server' = 'server' // 走全量还是走分页
+  private mode: 'client' | 'server' = 'server' 
   private headerSortBinder = new HeaderSortBinder()
-  private serverQuery: ITableQuery = { filterText: '' } // 默认 server 空筛选
-  private clientFilterText = '' // client 下清空筛选排序后恢复原样
+  private serverQuery: ITableQuery = { filterText: '' } 
+  private clientFilterText = '' 
   private viewport!: VirtualViewport
 
   private dataManager: DataManager
@@ -35,11 +34,11 @@ export class VirtualTable {
   private store!: TableStore 
   private originalColumns!: IColumn[]
   private unsubscribleStore: (() => void) | null = null 
+  private widthStorage: ColumnWidthStorage | null = null  // 列宽存储
 
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
   private resolveReady: (() => void) | null = null 
-  // 初始化完成前的 action 队列, 避免 store 为 undefined 
   private pendingActions: TableAction[] = []
   private isReady = false
 
@@ -47,6 +46,12 @@ export class VirtualTable {
     // 初始化配置 (此时的 totalRows 是默认值, 后续会被覆盖)
     const tableConfig = new TableConfig(userConfig)
     this.config = tableConfig.getAll()
+
+    // 初始化列宽存储, 如果配置了 tableId
+    if (userConfig.tableId) {
+      this.widthStorage = new ColumnWidthStorage(userConfig.tableId)
+      this.restoreColumnWidths() // 恢复保存的列宽
+    }
 
     this.dataManager = new DataManager(this.config)
     this.renderer = new DOMRenderer(this.config)
@@ -132,13 +137,10 @@ export class VirtualTable {
         }).catch(console.warn)
         return 
       }
-    // } catch (error) {
-    //   return 
-    // }
 
     // ======= 原逻辑: client 模式或者 用户传入了 initialData 的情况 ===========
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
-    this.mode = mode
+    this.mode = mode 
     this.config.totalRows = totalRows
     // 列 key 必须唯一, 尽早检验, 避免后续列顺序/拖拽状态全乱
     assertUniqueColumnKeys(this.config.columns)
@@ -190,6 +192,7 @@ export class VirtualTable {
         this.store.dispatch({ type: 'SORT_TOGGLE', payload: { key }})
       },
       onNeedLoadSummary: (summaryRow) => {
+        // 针对 server 模式
         this.loadSummaryData(summaryRow).catch(console.warn)
       }, 
       onColumnResizeEnd: (key, width) => {
@@ -270,23 +273,38 @@ export class VirtualTable {
       this.viewport.updateVisibleRows()
     })
     this.viewport.updateVisibleRows()
-  }
 
-  // 加载总结行数据 (传参)
-  private async loadSummaryData(summaryRow: HTMLDivElement) {
-    const summaryData = await this.dataManager.getSummaryData()
-    if (summaryData) {
-      // 值更新传入的那一行, 不再由 VirtualTable 保存 dom 引用
-      this.renderer.updateSummaryRow(summaryRow, summaryData)
+    // 首次挂载后, 立即刷新一次总结行数据
+    if (this.config.showSummary) {
+      this.refreshSummary().catch(console.warn)
     }
   }
 
-  // 未来因拓展排序, 筛选,刷新等功能, 则需更新总计行数据
+  // server 模式下: 加载总结行数据 (传参)
+  private async loadSummaryData(summaryRow: HTMLDivElement) {
+    if (!this.config.fetchSummaryData) return 
+    try {
+      const summaryData = await this.config.fetchSummaryData(this.serverQuery)
+      this.renderer.updateSummaryRow(summaryRow, summaryData)
+    } catch (err) {
+      console.error('加载总结行失败: ', err)
+    }
+  }
+
+  // client / server 刷新总结行数据
   public async refreshSummary() {
     if (!this.config.showSummary) return 
     const row = this.shell?.summaryRow
     if (!row) return 
-    await this.loadSummaryData(row)
+    // client 模式: 动态计算总结行
+    if (this.mode === 'client') {
+      const summaryData = this.dataManager.computeSummary(this.config.columns)
+      this.renderer.updateSummaryRow(row, summaryData)
+    } else {
+      // server 模式: 调用接口拉取
+      await this.loadSummaryData(row)
+    }
+    
   }
 
   // 对外暴露: 是否为客户端模式
@@ -325,6 +343,15 @@ export class VirtualTable {
       // 拖拽列宽调整, 不用 rebuild, 增量更新即可
       this.applyColumnsFromState()
       this.shell.updateColumnWidths(this.config.columns)
+
+      // 保存列宽到 localStorage
+      if (this.widthStorage) {
+        const widths: Record<string, number> = {}
+        this.config.columns.forEach(col => {
+          widths[col.key] = col.width
+        })
+        this.widthStorage.save(widths)
+      }
       return 
     }
 
@@ -349,6 +376,7 @@ export class VirtualTable {
 
     if (state.data.mode === 'client') {
       void this.applyClientState(state)
+      void this.refreshSummary()
     } else {
       // server 模式 
       void this.applyServerQuery(state.data.query).then(() => {
@@ -361,9 +389,11 @@ export class VirtualTable {
 
   // client 模式下, 将 state 应用到 DataManager + Scroller + Viewport
   private async applyClientState(state: TableState) {
+    
     const filterText: string = state.data.clientFilterText ?? ''
     const sort = state.data.sort 
     const columnFilters = state.data.columnFilters ?? {}
+
     // 先恢复 原始顺序 + 应用筛选, 保证可回到自然顺序
     this.clientFilterText = filterText
     this.dataManager.resetClientOrder({ filterText, columnFilters }) // 恢复为原始顺序,考虑了筛选动作
@@ -371,6 +401,8 @@ export class VirtualTable {
     if (sort) {
       this.dataManager.sortData(sort.key, sort.direction)
     }
+
+
     // 监控 totalRow 变化时, 需要重建 scroller 
     this.config.totalRows = this.dataManager.getFullDataLength()
     this.scroller = new VirtualScroller(this.config)
@@ -380,6 +412,7 @@ export class VirtualTable {
     this.viewport.refresh()
     await this.refreshSummary() // 总结行也可能刷新
   }
+
 
   // client 模式下, 推导列可选值 (topN 或全量去重, 避免百万枚举卡死)
   private getClientFilterOptions(key: string): string[] {
@@ -446,6 +479,22 @@ export class VirtualTable {
     // 最后再刷新可视区
     this.viewport.refresh()
   }
+
+  // 从 localStorage 恢复列宽 
+  private restoreColumnWidths() {
+    if (!this.widthStorage) return
+
+    const saveWidths = this.widthStorage.load()
+    if (!saveWidths) return 
+    // 应用保存的列宽配置
+    this.config.columns.forEach(col => {
+      if (saveWidths[col.key]) {
+        col.width = saveWidths[col.key]
+      }
+    })
+
+  }
+
 
 
   // 清空, 避免内存泄露

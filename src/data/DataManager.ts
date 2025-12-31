@@ -1,4 +1,4 @@
-import type { IConfig, ITableQuery, ColumnFilterValue } from '@/types'
+import type { IConfig, ITableQuery, ColumnFilterValue, IColumn } from '@/types'
 
 // 剥离数据逻辑, 支持 mock / api 切换
 export class DataManager {
@@ -304,8 +304,46 @@ export class DataManager {
     this.pageCache.clear()
   }
 
+  // client 模式下, 动态计算总结行, 先做求和 (基于当前筛选/排序后的数据)
+  public computeSummary(columns: IColumn[]): Record<string, any> {
+    const summary: Record<string, any> = {}
+    // 第一列默认显示 "合计"
+    if (columns.length > 0) {
+      summary[columns[0].key] = '合计'
+    }
+    // 遍历每列, 根据列配置计算聚合值
+    columns.forEach((col, index) => {
+      if (index === 0) return  // 第一列已是合计
+      // 从当前 fullData 中提取该列的所有值
+      const values = (this.fullData ?? [])
+        .map(row => row[col.key])
+        .filter(val => val !== null && val !== undefined && val !== '')
+
+      if (values?.length === 0) {
+        summary[col.key] = ''
+        return 
+      }
+
+      
+      // 判断是否为数值列, 先强转字符, 在解析为浮点数, 若解析不了则为 NaN, 过滤即可
+      const numericValues = values 
+        ?.map(v => typeof v === 'number' ? v : parseFloat(String(v)))
+        .filter(v =>!isNaN(v))
+      
+      if (numericValues!.length > 0) {
+        // 数值列计算总和 (后续拓展为 avg, max, min 等)
+        const sum = numericValues?.reduce((acc, val) => acc + val, 0)
+        summary[col.key] = sum.toFixed(2) // 保留两位小数
+      } else {
+        // 非数值列显示计数
+        summary[col.key] = `${values.length} 项`
+      }
+    })
+    return summary
+  }
+
   // 重置或者测试用
-  clearCache() {
+  public clearCache() {
     this.pageCache.clear()
     this.loadingPromises.clear()
   }

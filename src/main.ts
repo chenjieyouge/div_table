@@ -19,6 +19,7 @@ const smallData = Array.from({ length: 200000 }, (_, i) => ({
 
 const configSmall: IUserConfig = {
   container: '#table-small',
+  tableId: 'cj-mini-table-001',
   tableWidth: 600,
   tableHeight: 500,
   rowHeight: 36,
