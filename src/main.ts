@@ -9,7 +9,7 @@ import type { IUserConfig } from '@/types'
 const smallData = Array.from({ length: 200000 }, (_, i) => ({
   name: `User ${i}`,
   id: i,
-  dept: ['研发', '产品', '运营'][i % 3],
+  dept: ['研发部', '产品部', '运营部'][i % 3],
   region: ['华东', '华北', '华南'][i % 3],
   product: `Product-${i % 10}`,
   sales: (Math.random() * 10000).toFixed(2),
@@ -27,12 +27,70 @@ const configSmall: IUserConfig = {
   columns: [
     { key: 'name', title: '姓名', width: 120 },
     { key: 'id', title: 'ID', width: 100, filter: { enabled: true, type: 'numberRange'}},
-    { key: 'dept', title: '部门', width: 80, sortable: true, filter: { enabled: true, type: 'text' } },
-    { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },
+    { 
+      key: 'dept', 
+      title: '部门', 
+      width: 80, 
+      sortable: true, 
+      filter: { enabled: true, type: 'text' },
+      // 自定义渲染, 部门带颜色标签
+      render: (value) => {
+        const colors: Record<string, string> = {
+          '产品部': '#1890ff',
+          '研发部': '#52c41a',
+          '运营部': '#faad14'
+        }
+        const color = colors[value] || '#999'
+        return `<span style="color: ${color}; font-weight: bold;">${value}</span>`
+      }
+     },
+    { 
+      key: 'region', 
+      title: '区域', 
+      width: 100, 
+      filter: { enabled: true, type: 'set' },
+      // 自定义渲染, 区域 字段加粗显示
+      render: (value) => {
+        return `<strong>${value}</stron>`
+      }
+    },
     { key: 'product', title: '产品', width: 140, sortable: true, summaryType: 'count'},
-    { key: 'sales', title: '销售额', width: 120, sortable: true, summaryType: 'sum' },
+    { 
+      key: 'sales', 
+      title: '销售额',
+       width: 120, 
+       sortable: true, 
+       summaryType: 'sum',
+       // 自定义渲染：成本格式化为货币
+      render: (value) => {
+        const num = parseFloat(value)
+        if (isNaN(num)) return value
+        return `<span style="color: #ff4d4f;">¥${num.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span>`
+      }
+      },
     { key: 'cost', title: '成本', width: 120, sortable: true, summaryType: 'avg' },
-    { key: 'profit', title: '利润', width: 120 },
+    { 
+      key: 'profit', 
+      title: '利润', 
+      width: 120,
+      sortable: true,
+      // 自定义渲染: 利润带进度条
+      render: (value, row) => {
+        const profit = parseFloat(value)
+        const sales = parseInt(row.sales)
+        const percentage = sales > 0 ? (profit / sales * 100).toFixed(1) : 0
+        const color = profit > 0 ? 'red' : '#52c41a'
+
+        return `
+          <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+            <div style="flex: 1; height: 6px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">
+              <div style="width: ${Math.min(Math.abs(Number(percentage)), 100)}%; height: 100%; background: ${color};"></div>
+              <span style="color: ${color}; font-size: 12px; white-space: nowrap;">${percentage}%</span>
+            </div>
+          </div>
+        `
+      }
+    },
   ],
   onModeChange(mode: 'client' | 'server') {
     // console.log('[小数据表格-内存模式]: ', mode)
@@ -63,10 +121,20 @@ const configLarge: IUserConfig = {
     { key: 'name', title: '姓名', width: 150, filter: { enabled: true, type: 'text'}},
     { key: 'dept', title: '部门', width: 80, filter: { enabled: true, type: 'set'} },
     { key: 'region', title: '区域', width: 100, filter: { enabled: true, type: 'set'} },
-    { key: 'product', title: '产品', width: 140 },
+    { 
+      key: 'product', 
+      title: '产品', 
+      width: 140,
+      render: (value) => `<strong>${value}</strong>`
+    },
     { key: 'sales', title: '销售额', width: 120, sortable: true },
     { key: 'cost', title: '成本', width: 120 },
-    { key: 'profit', title: '利润', width: 120 },
+    { 
+      key: 'profit', 
+      title: '利润', 
+      width: 120,
+      // 自定义渲染: 利润带进度条
+    },
   ],
 
   fetchPageData: async (pageIndex: number, query?: ITableQuery) => {

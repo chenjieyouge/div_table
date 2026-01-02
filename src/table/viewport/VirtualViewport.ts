@@ -149,8 +149,8 @@ export class VirtualViewport {
       if (rowData !== undefined) {
         const rowEl = this.rowElementMap.get(rowIndex) // 从缓存中找到更新行
         if (rowEl) {
-          // 关键: 渲染行数据
-          this.renderer.updateDataRow(rowEl, rowData)
+          // 关键: 渲染行数据, 务必传 rowIndex, 用来实现自定义渲染单元格的标识
+          this.renderer.updateDataRow(rowEl, rowData, rowIndex) 
           
         }
       }

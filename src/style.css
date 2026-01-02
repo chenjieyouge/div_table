@@ -124,13 +124,22 @@
   left: 0;
   right: 0;
   will-change: transform;
-}
+} 
 
 /* 虚拟行的绝对定位 */
 .virtual-row {
   position: absolute;
   width: 100%;
   height: var(--row-height, 20px);
+  transition: background-color 0.15s ease /* 平滑过渡效果 */
+}
+
+.virtual-row:hover {
+  background-color: #e6f7ff;
+}
+/* 冻结列也有 hover 效果 */
+.virtual-row:hover .cell-frozen {
+  background-color: #e6f7ff;
 }
 
 .page-indicator {

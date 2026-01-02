@@ -62,7 +62,11 @@ export interface IColumn {
   sortable?: boolean
   filter?: IColumnFilterConfig  // 列筛选配置 (不配置则表示不可筛选)
   summaryType?: 'sum' | 'avg' | 'count' | 'none' // 总结行聚合类型
-
+  
+  // 自定义渲染器: 支持返回 html 字符串或 dom 元素
+  render?: (value: any, row: Record<string, any>, rowIndex: number) => string | HTMLDivElement
+  // 单元格样式制定: 根据值返回 className
+  cellClassName?: (value: any, row: Record<string, any>) => string
 }
 
 // 对外: 用户传入的配置 (宽松)

@@ -45,12 +45,41 @@ export class DOMRenderer {
   }
 
   // 更新数据行, 给 cells 在骨架屏之后, 请求到数据, 则填充上
-  updateDataRow(rowElement: HTMLDivElement, data: Record<string, any>) {
+  updateDataRow(rowElement: HTMLDivElement, data: Record<string, any>, rowIndex?: number) {
     const cells = rowElement.querySelectorAll('.table-cell')
     cells.forEach((cell, idx) => {
       cell.classList.remove('skeleton')
       const col = this.config.columns[idx]
-      cell.textContent = data[col.key] ?? ''
+      const value = data[col.key] ?? ''
+
+      // 若配置了自定义渲染器, 从进行单元格渲染
+      if (col.render) {
+        const rendered = col.render(value, data, rowIndex ?? 0)
+        // 清空单元格内容, 并判断返回的是 html 字符串还是 dom 元素
+        cell.innerHTML = ''
+        if (typeof rendered === 'string') {
+          cell.innerHTML = rendered
+
+        } else if (rendered instanceof HTMLElement) {
+          cell.appendChild(rendered)
+
+        } // else 还会有其他吗 ? 
+
+      } else {
+        // 默认渲染: 直接显示文本
+        cell.textContent = value !== undefined && value !== null ? String(value) : ''
+      }
+      // 若配置了单元格样式定制, 则添加 className
+      if (col.cellClassName) {
+        const className = col.cellClassName(value, data)
+        if (className) {
+          cell.className = `table-cell ${className}`
+          // 保留冻结列样式
+          if (idx < this.config.frozenColumns) {
+            cell.classList.add('cell-frozen')
+          }
+        }
+      }
     })
   }
 
