@@ -162,6 +162,21 @@ export class DOMRenderer {
           filterBtn.title = '筛选'
           cell.appendChild(filterBtn)
         }
+
+        // 列菜单按钮 (三个横点)
+        const menuBtn = document.createElement('div')
+        menuBtn.className = 'col-menu-btn'
+        menuBtn.dataset.columnKey = col.key
+        menuBtn.innerHTML = `
+          <svg width="16"; height="16"; viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="8" cy="3" r="1.5"/>
+            <circle cx="8" cy="8" r="1.5"/>
+            <circle cx="8" cy="13" r="1.5"/>
+          </svg>
+        `
+        menuBtn.title = '列菜单'
+        cell.appendChild(menuBtn)
+
       } else if (type === 'summary') {
         cell.textContent = data?.[col.key] ?? (index === 0 ? '合计' : '')
       } else {

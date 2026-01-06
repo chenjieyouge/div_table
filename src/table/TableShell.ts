@@ -8,8 +8,8 @@ import { SortIndicatorView } from "@/table/interaction/SortIndicatorView";
 import { ColumnResizeBinder } from "@/table/interaction/ColumnResizeBinder";
 import { ColumnDragBinder } from "@/table/interaction/ColumnDragBinder";
 import { ColumnFilterBinder } from "@/table/interaction/ColumnFilterBinder";
-
 import { TableResizeBinder } from "@/table/interaction/TableResizeBinder";
+import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
 
 
 export interface ITableShell {
@@ -42,6 +42,10 @@ export function mountTableShell(params: {
   getCurrentFilter?: (key: string) => ColumnFilterValue | undefined // 列当前筛选值
 
   onTableResizeEnd?: (newWidth: number) => void // 表格拖拽后的新总宽度
+  // 列菜单相关回调
+  getCurrentSort?: () => { key: string; direction: 'asc' | 'desc' } | null 
+  onMenuSort?: (key: string, direction: 'asc' | 'desc' | null) => void 
+
 
 }): ITableShell {
 
@@ -57,6 +61,8 @@ export function mountTableShell(params: {
     getFilterOptions,
     getCurrentFilter,
     onTableResizeEnd,
+    getCurrentSort,
+    onMenuSort
    } = params
 
 
@@ -107,6 +113,17 @@ export function mountTableShell(params: {
       onFilterChange: onColumnFilterChange,
       getFilterOptions,
       getCurrentFilter,
+    })
+  }
+
+  // 绑定列菜单弹窗
+  const menuBinder = new ColumnMenuBinder()
+  if (getCurrentSort && onMenuSort) {
+    menuBinder.bind({
+      scrollContainer,
+      headerRow,
+      getCurrentSort,
+      onSort: onMenuSort
     })
   }
 
@@ -227,6 +244,7 @@ export function mountTableShell(params: {
       dragBinder.unbind(headerRow) // 释放列拖拽改顺序字段
       filterBinder.unbind()  // 释放列值筛选
       tableResizeBinder.unbind() // 释放整表宽度拖拽事件
+      menuBinder.unbind // 解绑列菜单
     }
   }
 }

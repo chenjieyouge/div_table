@@ -1,0 +1,97 @@
+import type { IColumn } from "@/types";
+
+export interface IColumnMenuConfig {
+  column: IColumn
+  currentSort?: { key: string; direction: 'asc' | 'desc' } | null 
+  onSort?: (direction: 'asc' | 'desc' | null) => void 
+  onPin?: (postion: 'left' | 'right' | null) => void 
+  onAutoSize?: (mode: 'this' | 'all') => void
+  onHide?: () => void
+  onReset?: () => void 
+}
+
+export class ColumnMenuView {
+  private popupEl: HTMLDivElement | null = null 
+  // 创建菜单面板 dom 
+  public render(config: IColumnMenuConfig, anchorEl: HTMLElement, container: HTMLElement): HTMLDivElement {
+    // 创建前先清理一波
+    this.destroy()
+    const { column, currentSort, onSort } = config
+    const isSorted = currentSort?.key === column.key
+    // 创建弹窗容器
+    this.popupEl = document.createElement('div')
+    this.popupEl.className = 'col-menu-popup'
+    // 计算位置 (在按钮下方)
+    const rect = anchorEl.getBoundingClientRect()
+    const containerRect = container.getBoundingClientRect()
+    this.popupEl.style.left = `${rect.left - containerRect.left}px` // 主要不要漏掉单位 'px'
+    this.popupEl.style.top = `${rect.bottom - containerRect.top + 6}px`
+    // 菜单列表项
+    const menuItems: Array<{
+      icon: string
+      label: string 
+      action: () => void 
+      disabled?: boolean 
+      active?: boolean
+    }> = []
+    // 排序菜单项
+    if (column.sortable) {
+      menuItems.push({
+        icon: '↑',
+        label: '升序',
+        action: () => onSort?.('asc'),
+        active: isSorted && currentSort?.direction === 'asc'
+      })
+      menuItems.push({
+        icon: '↓',
+        label: '降序',
+        action: () => onSort?.('desc'),
+        active: isSorted && currentSort?.direction === 'desc'
+      })
+
+      if (isSorted) {
+        menuItems.push({
+          icon: '✕',
+          label: '取消',
+          action: () => onSort?.(null)
+        })
+      }
+    }
+
+    // 渲染菜单项
+    menuItems.forEach(item => {
+      const menuItem = document.createElement('div')
+      menuItem.className = 'col-menu-item'
+
+      if(item.active) menuItem.classList.add('active')
+      if (item.disabled) menuItem.classList.add('disabled')
+
+      menuItem.innerHTML = `
+        <span class="col-menu-icon">${item.icon}</span>
+        <span class="col-menu-label">${item.label}</span>
+      `
+      if (!item.disabled) {
+        menuItem.addEventListener('click', (e) => {
+          e.stopPropagation()
+          item.action()
+          this.destroy()
+        })
+      }
+      // 挂载
+      this.popupEl?.appendChild(menuItem)
+    })
+    container.appendChild(this.popupEl)
+    return this.popupEl
+  }
+
+  // 销毁菜单
+  public destroy() {
+    this.popupEl?.remove()
+    this.popupEl = null 
+  }
+
+  // 获取当前菜单元素
+  public getElement(): HTMLDivElement | null {
+    return this.popupEl
+  }
+}

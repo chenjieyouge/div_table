@@ -255,6 +255,23 @@ export class VirtualTable {
         //   })
         // })
       },
+      getCurrentSort: () => {
+        // 列菜单回调
+        const state = this.store.getState()
+        return state.data.sort
+      },
+      onMenuSort: (key, direction) => {
+        if (direction === null) {
+          this.store.dispatch({ type: 'SORT_SET', payload: { sort: null }})
+        } else {
+          this.store.dispatch({
+            type: 'SORT_SET',
+            payload: {
+              sort: { key, direction }
+            }
+          })
+        }
+      }
       // 后续拓展...
 
     })
