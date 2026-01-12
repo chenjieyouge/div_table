@@ -241,7 +241,7 @@ export function mountTableShell(params: {
     }
     },
     updateColumnOrder(columns) {
-      // 重排 header 顺序, 根据传入的新 columns 
+      // 1. 重排 header 顺序, 根据传入的新 columns 
       const headerRow = scrollContainer.querySelector('.sticky-header') as HTMLDivElement | null
       if (headerRow) {
         const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.table-cell'))
@@ -253,12 +253,55 @@ export function mountTableShell(params: {
         })
 
         headerRow.innerHTML = ''
-        columns.forEach(col => {
-          const cell = map.get(col.key)
-          if (cell) headerRow.appendChild(cell)
+        columns.forEach((col, index) => {
+          let cell = map.get(col.key)
+          // 若单元格不存在, 则创建新的
+          if (!cell) {
+            cell = document.createElement('div')
+            cell.className = 'table-cell header-cell'
+            cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+            cell.dataset.columnKey = col.key
+            // 添加表头文字
+            const textSpan = document.createElement('span')
+            textSpan.className = 'heaer-text'
+            textSpan.textContent = col.title
+            cell.appendChild(textSpan)
+            // 添加排序标记
+            if (col.sortable) {
+              cell.dataset.sortable = 'true'
+            }
+            // 添加列宽拖拽手柄
+            if (col.filter?.enabled) {
+              const filterBtn = document.createElement('div')
+              filterBtn.className = 'col-filter-btn'
+              filterBtn.dataset.columnKey = col.key
+              filterBtn.dataset.filterType = col.filter.type
+              filterBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                  <path d="M1 2h12l-5 6v4l-2 1V8L1 2z"/>
+                </svg>
+              `
+              cell.appendChild(filterBtn)
+            }
+          }
+          headerRow.appendChild(cell)
+        })
+
+        // 重新应用冻结列样式
+        const headerCells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.table-cell'))
+        let leftOffset = 0
+        headerCells.forEach((cell, index) => {
+          cell.classList.remove('cell-frozen')
+          cell.style.left = ''
+          if (index < config.frozenColumns) {
+            cell.classList.add('cell-frozen')
+            cell.style.left = `${leftOffset}px`
+            leftOffset += cell.getBoundingClientRect().width 
+          }
         })
       }
-      // 重排 summary
+
+      // 2. 重排 summary
       const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
       if (summaryRow) {
         const cells = Array.from(summaryRow.querySelectorAll<HTMLDivElement>('.table-cell'))
@@ -269,11 +312,54 @@ export function mountTableShell(params: {
           if (key) map.set(key, cell)
         })
         summaryRow.innerHTML = ''        
-        columns.forEach(col => {
-          const cell = map.get(col.key)
-          if (cell) summaryRow.appendChild(cell)
+        columns.forEach((col, index) => {
+          let cell = map.get(col.key)
+          // 若单元格不存在, 则创建新的
+          if (!cell) {
+            cell = document.createElement('div')
+            cell.className = 'table-cell'
+            cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+            cell.dataset.columnKey = col.key
+            cell.textContent = ''  // summary 数据异步加载
+          }
+          summaryRow.appendChild(cell)
+        })
+        // 重新应用冻结列样式
+        const summaryCells = Array.from(summaryRow.querySelectorAll<HTMLDivElement>('.table-cell'))
+        let leftOffset = 0
+        summaryCells.forEach((cell, index) => {
+          cell.classList.remove('cell-frozen')
+          cell.style.left = ''
+          if (index < config.frozenColumns) {
+            cell.classList.add('cell-frozen')
+            cell.style.left = `${leftOffset}px`
+            leftOffset += cell.getBoundingClientRect().width
+          }
         })
       }
+
+      // 3. 更新数据行
+      if (config.frozenColumns > 0) {
+        requestAnimationFrame(() => {
+          const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
+          dataRows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+            let leftOffset = 0
+            cells.forEach((cell, index) => {
+              cell.classList.remove('cell-frozen')
+              cell.style.left = ''
+              if (index < config.frozenColumns) {
+                cell.classList.add('cell-frozen')
+                cell.style.left = `${leftOffset}px`
+                leftOffset += cell.getBoundingClientRect().width
+              }
+            })
+          })
+        })
+      }
+      // 4. 更新表格总宽度
+      const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
+      tableWrapper.style.width = `${totalWidth}px`
     },
     // 其他更多拓展...
 

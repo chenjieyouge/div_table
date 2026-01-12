@@ -1,4 +1,5 @@
 import { ColumnManagerView, IColumnManagerConfig } from "@/table/interaction/ColumnManagerView";
+import { IColumnMenuConfig } from "@/table/interaction/ColumnMenuView";
 import type { IColumn } from "@/types";
 
 
@@ -27,6 +28,43 @@ export class ColumnManagerBinder {
       onHideAll,
       onReset
     } = params
+
+    // 渲染面板的辅助函数
+    const renderPanel = () => {
+    const config: IColumnManagerConfig = {
+      allColumns: getAllColumns(),
+      hiddenKeys: getHiddenKeys(),
+      onToggle: (key, visible) => {
+        onToggle(key, visible)
+        // ✅ 修复：更新后重新渲染面板，保持面板打开状态
+        requestAnimationFrame(() => {
+          renderPanel()
+        })
+      },
+      onShowAll: () => {
+        onShowAll()
+        // ✅ 修复：全选后重新渲染面板，而不是关闭
+        requestAnimationFrame(() => {
+          renderPanel()
+        })
+      },
+      onHideAll: () => {
+        onHideAll()
+        // ✅ 修复：全不选后重新渲染面板
+        requestAnimationFrame(() => {
+          renderPanel()
+        })
+      },
+      onReset: () => {
+        onReset()
+        // ✅ 修复：重置后重新渲染面板
+        requestAnimationFrame(() => {
+          renderPanel()
+        })
+      },
+    }
+    this.managerView.render(config, container)
+  }
     // 点击触发按钮小齿轮, 打开/关闭面板
     triggerBtn.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation()
@@ -35,21 +73,8 @@ export class ColumnManagerBinder {
         this.closePanel()
         return 
       }
-      // 渲染面板
-      const config: IColumnManagerConfig = {
-        allColumns: getAllColumns(),
-        hiddenKeys: getHiddenKeys(),
-        onToggle: (key, visible) => {
-          onToggle(key, visible)
-          // 更新面板 (重新渲染)
-          // this.closePanel()
-          // this.managerView.render(config, container)
-        },
-        onShowAll,
-        onHideAll,
-        onReset,
-      }
-      this.managerView.render(config, container) // 真正渲染!
+      // 渲染面板-使用新的渲染函数
+      renderPanel()
 
       // 点击外部关闭面板
       this.onClickOutside = (e: MouseEvent) => {

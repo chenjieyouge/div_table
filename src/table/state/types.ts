@@ -36,3 +36,6 @@ export type TableAction =
   | { type: 'COLUMN_FILTER_CLEAR'; payload: { key: string } } // 清空筛选
   | { type: 'COLUMN_HIDE'; payload: { key: string } }  // 隐藏列
   | { type: 'COLUMN_SHOW'; payload: { key: string } }  // 显示列
+  | { type: 'COLUMN_BATCH_HIDE'; payload: { keys: string[] } }  // 批量隐藏
+  | { type: 'COLUMN_BATCH_SHOW'; payload: { keys: string[] } }  // 批量显示
+  | { type: 'COLUMNS_RESET_VISIBILITY'; payload?: {} }

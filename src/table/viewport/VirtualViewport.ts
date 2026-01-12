@@ -45,7 +45,7 @@ export class VirtualViewport {
 
   // 更新列顺序, 给可视区的所有行数据 dom 重排
   public updateColumnOrder(columns: IConfig['columns']) {
-    const rows = this.virtualContent.querySelectorAll('.table-row')
+    const rows = this.virtualContent.querySelectorAll<HTMLDivElement>('.table-row')
     rows.forEach(row => {
       const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
       const map = new Map<string, HTMLDivElement>()
@@ -54,10 +54,47 @@ export class VirtualViewport {
         if (key) map.set(key, cell)
       })
 
+      // 获取当前行的数据
+      const rowIndex = parseInt(row.dataset.rowIndex || '0', 10)
+      const rowData = this.dataManager.getRowData(rowIndex)
+
       row.innerHTML = ''
-      columns.forEach(col => {
-        const cell = map.get(col.key)
-        if (cell) row.appendChild(cell)
+      columns.forEach((col, index) => {
+        let cell = map.get(col.key)
+        // 若单元格不存在则创建
+        if (!cell) {
+          cell = document.createElement('div')
+          cell.className = 'table-cell'
+          cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+          cell.dataset.columnKey = col.key 
+          // 填充数据
+          if (rowData) {
+            const value = rowData[col.key]
+            if (col.render) {
+              const rendered = col.render(value, rowData, rowIndex)
+              if (typeof rendered === 'string') {
+                cell.innerHTML = rendered
+              } else if (rendered instanceof HTMLElement) {
+                cell.appendChild(rendered)
+              }
+            } else {
+              cell.textContent = value != null ? String(value) : ''
+            }
+          }
+        }
+        row.append(cell)
+      })
+      // 重新应用冻结列样式和位置 (是否多余了?)
+      const newCells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+      let leftOffset = 0
+      newCells.forEach((cell, index) => {
+        cell.classList.remove('cell-frozen')
+        cell.style.left = ''
+        if (index < this.config.frozenColumns) {
+          cell.classList.add('cell-frozen')
+          cell.style.left = `${leftOffset}px`
+          leftOffset += cell.getBoundingClientRect().width
+        }
       })
     })
   }

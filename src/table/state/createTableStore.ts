@@ -175,10 +175,42 @@ export function createTableStore(params: {
         return { ...prev, columns: { ...prev.columns, hiddenKeys} }
       }
 
+      case 'COLUMN_BATCH_HIDE': {
+        const keysToHide = action.payload.keys
+        return {
+          ...prev,
+          columns: {
+            ...prev.columns,
+            hiddenKeys: Array.from(new Set([...prev.columns.hiddenKeys, ...keysToHide]))
+          }
+        }
+      }
+
       case 'COLUMN_SHOW': {
         const { key } = action.payload
         const hiddenKeys = prev.columns.hiddenKeys.filter(k => k !== key)
         return { ...prev, columns: { ...prev.columns, hiddenKeys }}
+      }
+
+      case 'COLUMN_BATCH_SHOW': {
+        const keysToShow = action.payload.keys
+        return {
+          ...prev,
+          columns: {
+            ...prev.columns,
+            hiddenKeys: prev.columns.hiddenKeys.filter(k => !keysToShow.includes(k))
+          }
+        }
+      }
+
+      case 'COLUMNS_RESET_VISIBILITY': {
+        return {
+          ...prev,
+          columns: {
+            ...prev.columns,
+            hiddenKeys: []
+          }
+        }
       }
 
       default:

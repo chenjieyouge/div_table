@@ -280,6 +280,16 @@ export class VirtualTable {
         return this.store.getState().columns.hiddenKeys
       },
       onColumnToggle: (key, visible) => {
+        // 检查是否冻结列 
+        const colIndex = this.originalColumns.findIndex(c => c.key === key)
+        const isFrozen = colIndex < this.config.frozenColumns 
+
+        if (isFrozen && !visible) {
+          // 冻结列不让隐藏
+          console.warn('冻结列不允许隐藏')
+          return 
+        }
+
         if (visible) {
           this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
         } else {
@@ -287,24 +297,26 @@ export class VirtualTable {
         }
       },
       onShowAllColumns: () => {
-        // 将隐藏的字段都显示出来
+        // 批量-显示所有隐藏列
         const hiddenKeys = this.store.getState().columns.hiddenKeys
-        hiddenKeys.forEach(key => {
-          this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
-        })
+        if (hiddenKeys.length > 0) {
+          this.store.dispatch({
+            type: 'COLUMN_BATCH_SHOW',
+            payload: { keys: hiddenKeys }
+          })
+        }
       },
       onHideAllColumns: () => {
-        // 所有列都不显示, 现在这种写法是否会带来性能问题?
-        this.originalColumns.forEach(col => {
-          this.store.dispatch({ type: 'COLUMN_HIDE', payload: { key: col.key } })
+        // 批量-隐藏所有列
+        const allKeys = this.originalColumns.map(col => col.key)
+        this.store.dispatch({
+          type: 'COLUMN_BATCH_HIDE',
+          payload: { keys: allKeys }
         })
       },
       onResetColumns: () => {
-        // 重置, 显示所有列, 摘个和 onShowAllColumns 好像是一样的 ?
-        const hiddenKeys = this.store.getState().columns.hiddenKeys
-        hiddenKeys.forEach(key => {
-          this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
-        })
+        // 重置, 显示所有列
+        this.store.dispatch({ type: 'COLUMNS_RESET_VISIBILITY' })
       }
 
       // 后续更多回调拓展... virtual -> shell -> binder -> view 
@@ -428,10 +440,14 @@ export class VirtualTable {
       return 
     }
 
-    if (action.type === 'COLUMN_HIDE' || action.type === 'COLUMN_SHOW') {
+    // 单列-显示隐藏操作
+    if (action.type === 'COLUMN_HIDE' || 
+       action.type === 'COLUMN_SHOW') {
       // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
       // this.rebuild()
       this.applyColumnsFromState()
+      // 更新列宽, 列顺序(移除隐藏列), viewport 列配置
+      this.shell.updateColumnWidths(this.config.columns)
       this.shell.updateColumnOrder(this.config.columns)
       this.viewport.updateColumnOrder(this.config.columns)
       // 保存隐藏列状态到 localStorage 
@@ -442,8 +458,21 @@ export class VirtualTable {
         // localStorage.setItem(`table_hidden_keys_${this.config.tableHeight} || 'default`,
         //   JSON.stringify(hiddenKeys)
         // )
-
       }
+      return 
+    }
+
+    // 批量-列显示隐藏操作
+    if (action.type === 'COLUMN_BATCH_HIDE' || 
+       action.type === 'COLUMN_BATCH_SHOW' ||
+       action.type === 'COLUMNS_RESET_VISIBILITY') {
+      // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
+      // this.rebuild()
+      this.applyColumnsFromState()
+      // 更新列宽, 列顺序(移除隐藏列), viewport 列配置
+      this.shell.updateColumnWidths(this.config.columns)
+      this.shell.updateColumnOrder(this.config.columns)
+      this.viewport.updateColumnOrder(this.config.columns)
       return 
     }
 

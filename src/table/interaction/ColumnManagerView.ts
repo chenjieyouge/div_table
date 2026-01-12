@@ -14,6 +14,13 @@ export class ColumnManagerView {
 
   // 渲染表格右侧列管理面板
   public render(config: IColumnManagerConfig, container: HTMLDivElement): HTMLDivElement {
+    // 若面板已存在, 则只更新 checkbox 状态, 不重建面板
+    if (this.panelEl && this.panelEl.parentElement === container) {
+      this.updateCheckboxStates(config.allColumns, config.hiddenKeys)
+      return this.panelEl
+    }
+    
+    // 否则则重新创建面板
     this.destroy()
     const {
       allColumns,
@@ -77,7 +84,7 @@ export class ColumnManagerView {
     btnShowAll.textContent = '全选'
     btnShowAll.addEventListener('click', () => {
       onShowAll()
-      this.destroy()
+      // this.destroy()
     })
     // 取消全选
     const btnHideAll = document.createElement('button')
@@ -85,7 +92,7 @@ export class ColumnManagerView {
     btnHideAll.textContent = '全不选'
     btnHideAll.addEventListener('click', () => {
       onHideAll()
-      this.destroy()
+      // this.destroy()
     })
     // 重置按钮
     const btnReset = document.createElement('button')
@@ -93,7 +100,7 @@ export class ColumnManagerView {
     btnReset.textContent = '重置'
     btnReset.addEventListener('click', () => {
       onReset()
-      this.destroy()
+      // this.destroy()
     })
     // 挂载
     footer.appendChild(btnShowAll)
@@ -115,5 +122,16 @@ export class ColumnManagerView {
   // 获取当前面板元素
   public getElement(): HTMLDivElement | null {
     return this.panelEl
+  }
+
+  // 更新 checkbox 状态
+  private updateCheckboxStates(allColumns: IColumn[], hiddenKeys: string[]) {
+    if (!this.panelEl) return 
+    allColumns.forEach(col => {
+      const checkbox = this.panelEl!.querySelector(`#col-manager-${col.key}`) as HTMLInputElement
+      if (checkbox) {
+        checkbox.checked = !hiddenKeys.includes(col.key)
+      }
+    })
   }
 }
