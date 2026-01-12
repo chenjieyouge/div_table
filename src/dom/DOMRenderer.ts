@@ -9,7 +9,7 @@ export class DOMRenderer {
     this.config = config
   }
 
-  // 表头行 (一维)
+  // 创建单个表头单元格, 公共给外部使用
   createHeaderRow(): HTMLDivElement {
     const row = document.createElement('div')
     row.className = 'table-row sticky-header'
@@ -191,5 +191,153 @@ export class DOMRenderer {
     })
   }
 
-  // 更多渲染功能, 如按钮, 图标, 颜色等
+  // 辅助方法: 创建单个表头单元格 (公开给重建 dom 等多地方反复用)
+  public createHeaderCell(col: IColumn, index: number): HTMLDivElement {
+    // 新建一个单元格
+    const cell = document.createElement('div')
+    cell.className = 'table-cell header-cell' 
+    cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+    cell.dataset.columnKey = col.key 
+
+    // 添加-表头字段用 span 包裹一下, 方便精准控制
+    const textSpan = document.createElement('span')
+    textSpan.className = 'header-text'
+    textSpan.textContent = col.title 
+    cell.appendChild(textSpan)
+
+    // 添加-是否允许排序的标记
+    if (col.sortable) {
+      cell.dataset.sortable = 'true'
+    }
+
+    // 添加-拖拽列宽的手柄
+    const handle = document.createElement('div')
+    handle.className = 'col-resize-handle'
+    handle.dataset.columnKey = col.key
+    cell.appendChild(handle)
+
+    // 添加-过滤图标
+    if (col.filter?.enabled) {
+      const filterBtn = document.createElement('div')
+      filterBtn.className = 'col-filter-btn'
+      filterBtn.dataset.columnKey = col.key
+      filterBtn.dataset.filterType = col.filter.type 
+      filterBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <path d="M1 2h12l-5 6v4l-2 1V8L1 2z"/>
+        </svg>
+      `
+      filterBtn.title = '筛选'
+      cell.appendChild(filterBtn)
+    }
+
+    // 添加-列菜单功能弹框
+    const menuBtn = document.createElement('div')
+    menuBtn.className = 'col-menu-btn'
+    menuBtn.dataset.columnKey = col.key
+    menuBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <circle cx="8" cy="3" r="1.5"/>
+        <circle cx="8" cy="8" r="1.5"/>
+        <circle cx="8" cy="13" r="1.5"/>
+      </svg>
+    `
+    menuBtn.title = '列菜单'
+    cell.appendChild(menuBtn)
+
+    // 添加-冻结列处理
+    if (index < this.config.frozenColumns) {
+      cell.classList.add('cell-frozen')
+    }
+    return cell 
+  }
+
+  // 辅助方法: 创建单个汇总行单元格
+  public createSummaryCell(col: IColumn, index: number, summaryData?: Record<string, any>): HTMLDivElement {
+    // 创建单元格
+    const cell = document.createElement('div')
+    cell.className = 'table-cell'
+    cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+    cell.dataset.columnKey = col.key
+    cell.textContent = summaryData?.[col.key] ?? (index === 0 ? '合计' : '')
+
+    // 添加-冻结列处理
+    if (index < this.config.frozenColumns) {
+      cell.classList.add('cell-frozen')
+    }
+    return cell
+  }
+
+  // 辅助方法: 创建单个数据单元格
+  public createDataCell(
+    col: IColumn,
+    rowData: Record<string, any> | null,  // 允许 null, 用的地方均要判断
+    rowIndex: number,
+    colIndex: number
+  ): HTMLDivElement {
+    // 创建单元格
+    const cell = document.createElement('div')
+    cell.className = 'table-cell'
+    cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
+    cell.dataset.columnKey = col.key
+
+    // 添加空值检查
+    if (rowData) {
+      // 获取单元格的值, 可能是 string, html, ...
+      const value = rowData[col.key]
+
+      // 逻辑复用 updateDataRow 即可
+      if (col.render) {
+        const rendered = col.render(value, rowData, rowIndex)
+        if (typeof rendered === 'string') {
+          cell.innerHTML = rendered
+        } else if (rendered instanceof HTMLElement) {
+          cell.appendChild(rendered)
+        }
+      } else {
+        cell.textContent = value != null ? String(value) : ''
+      }
+
+      // 应用条件样式-类名字符串
+      if (col.cellClassName) {
+        const className = col.cellClassName(value, rowData)
+        if (className) {
+          cell.className = `table-cell ${className}`
+        }
+      }
+
+      // 应用条件样式-css对象
+      if (col.cellStyle) {
+        const styleObj = col.cellStyle(value, rowData, rowIndex)
+        if (styleObj) {
+          Object.assign(cell.style, styleObj)
+        }
+      }
+    }
+    // 处理冻结列
+    if (colIndex < this.config.frozenColumns) {
+      cell.classList.add('cell-frozen')
+    }
+    return cell 
+  }
+
+  // 辅助方法: 统一应用冻结列样式和位置
+  public applyFrozenStyles(row: HTMLDivElement): void {
+    const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+    let leftOffset = 0
+
+    cells.forEach((cell, index) => {
+      // 先移除列样式, 保证纯净
+      cell.classList.remove('cell.frozen')
+      cell.style.left = ''
+      // 根据列索引, 重新应用冻结列样式
+      if (index < this.config.frozenColumns) {
+        cell.classList.add('cell.frozen')
+        cell.style.left = `${leftOffset}px`
+        leftOffset += cell.getBoundingClientRect().width
+      }
+    })
+  }
+  
+
 }

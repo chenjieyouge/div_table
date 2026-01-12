@@ -62,40 +62,17 @@ export class VirtualViewport {
       columns.forEach((col, index) => {
         let cell = map.get(col.key)
         // 若单元格不存在则创建
-        if (!cell) {
-          cell = document.createElement('div')
-          cell.className = 'table-cell'
-          cell.style.width = `var(--col-${col.key}-width, ${col.width}px)`
-          cell.dataset.columnKey = col.key 
-          // 填充数据
-          if (rowData) {
-            const value = rowData[col.key]
-            if (col.render) {
-              const rendered = col.render(value, rowData, rowIndex)
-              if (typeof rendered === 'string') {
-                cell.innerHTML = rendered
-              } else if (rendered instanceof HTMLElement) {
-                cell.appendChild(rendered)
-              }
-            } else {
-              cell.textContent = value != null ? String(value) : ''
-            }
-          }
+        if (!cell && rowData) {
+          cell = this.renderer.createDataCell(col, rowData, rowIndex, index)
         }
-        row.append(cell)
-      })
-      // 重新应用冻结列样式和位置 (是否多余了?)
-      const newCells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
-      let leftOffset = 0
-      newCells.forEach((cell, index) => {
-        cell.classList.remove('cell-frozen')
-        cell.style.left = ''
-        if (index < this.config.frozenColumns) {
-          cell.classList.add('cell-frozen')
-          cell.style.left = `${leftOffset}px`
-          leftOffset += cell.getBoundingClientRect().width
+
+        if (cell) {
+          row.append(cell)
         }
+        
       })
+      // 重新应用冻结列样式
+      this.renderer.applyFrozenStyles(row)
     })
   }
 
