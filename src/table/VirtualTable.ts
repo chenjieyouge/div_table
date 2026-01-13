@@ -35,7 +35,8 @@ export class VirtualTable {
   private originalColumns!: IColumn[]
   private unsubscribleStore: (() => void) | null = null 
   private widthStorage: ColumnWidthStorage | null = null  // 列宽存储
-  private columnManager!: ColumnManager // 列统一管理器
+
+  private columnManager!: ColumnManager // 列统一管理器, 这个很强大
 
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
@@ -403,7 +404,11 @@ export class VirtualTable {
     if (action.type === 'COLUMN_WIDTH_SET') {
       // 拖拽列宽调整, 不用 rebuild, 增量更新即可
       this.applyColumnsFromState()
+      // 清除缓存
+      this.columnManager.clearCache()
+      // 更新列宽 css 变量
       this.shell.updateColumnWidths(this.config.columns)
+      
       // 保存列宽到 localStorage
       if (this.widthStorage) {
         const widths: Record<string, number> = {}
@@ -417,9 +422,16 @@ export class VirtualTable {
 
     if (action.type === 'COLUMN_ORDER_SET') {
       // 拖拽列顺序调整, 不用 rebuild, 增量更新即可
-      this.applyColumnsFromState()
-      this.shell.updateColumnOrder(this.config.columns)
-      this.viewport.updateColumnOrder(this.config.columns)
+      this.applyColumnsFromState() // 先更新列状态
+      // 用 ColumnManager 统一更新
+      this.columnManager.updateColumns(this.config.columns, {
+        headerRow: this.shell.scrollContainer.querySelector('.sticky-header') as HTMLDivElement,
+        summaryRow: this.shell.scrollContainer.querySelector('.sticky-summary') as HTMLDivElement,
+        dataRows: Array.from(this.shell.virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row'))
+      })
+      // 更新列宽, 同时会设置 css 变量
+      this.shell.updateColumnWidths(this.config.columns)
+
       // 直接保存当前列顺序到 localStorage
       if (this.widthStorage) {
         const columnKeys = this.config.columns.map(col => col.key)

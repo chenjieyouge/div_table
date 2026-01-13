@@ -65,11 +65,9 @@ export class VirtualViewport {
         if (!cell && rowData) {
           cell = this.renderer.createDataCell(col, rowData, rowIndex, index)
         }
-
         if (cell) {
           row.append(cell)
         }
-        
       })
       // 重新应用冻结列样式
       this.renderer.applyFrozenStyles(row)

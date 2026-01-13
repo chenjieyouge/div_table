@@ -20,11 +20,17 @@ export class ColumnManager {
   private config: IConfig 
   private renderer: DOMRenderer
   private dataManager: DataManager
+  private frozenOffsetCache: number[] = [] // 缓存冻结列偏移量
 
   constructor(config: IConfig, renderer: DOMRenderer, dataManager: DataManager) {
     this.config = config 
     this.renderer = renderer
     this.dataManager = dataManager
+  }
+
+  // 清除缓存, 列宽变化时调用
+  public clearCache(): void {
+    this.frozenOffsetCache = []
   }
 
   /**
@@ -41,6 +47,9 @@ export class ColumnManager {
     }
   ): void {
     const { headerRow, summaryRow, dataRows } = targets
+    // 批量更新前, 先清除缓存
+    this.clearCache()
+
     // 批量更新, 减少重排
     if (headerRow) {
       this.updateHeaderRow(headerRow, columns)

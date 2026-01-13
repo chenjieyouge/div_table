@@ -337,21 +337,6 @@ export class DOMRenderer {
         cell.style.left = `var(--col-${key}-left, 0px)`
       }
     })
-
-    // const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
-    // let leftOffset = 0
-
-    // cells.forEach((cell, index) => {
-    //   // 先移除列样式, 保证纯净
-    //   cell.classList.remove('cell.frozen')
-    //   cell.style.left = ''
-    //   // 根据列索引, 重新应用冻结列样式
-    //   if (index < this.config.frozenColumns) {
-    //     cell.classList.add('cell.frozen')
-    //     cell.style.left = `${leftOffset}px`
-    //     leftOffset += cell.getBoundingClientRect().width
-    //   }
-    // })
   }
   
 

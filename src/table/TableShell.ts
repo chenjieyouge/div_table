@@ -24,7 +24,7 @@ export interface ITableShell {
   destroy(): void // 释放所有事件, 清空 dom 
 
   updateColumnWidths(columns: IConfig['columns']): void  // 增量更新列宽 (css 变量)
-  updateColumnOrder(columns: IConfig['columns']): void  // 增量更新列顺序 (dom 重排)
+  updateColumnOrder(columns: IConfig['columns']): void  // 专门给列拖拽顺序用的
 
 }
 
@@ -266,8 +266,12 @@ export function mountTableShell(params: {
       }
     },
     updateColumnOrder(columns) {
-      // 1. 重排 header 顺序, 根据传入的新 columns 
+      // 保留这个方法, 就专门为 列拖拽排序用, 但逻辑已和 ColumnManager 对齐
+      // 重排 header 顺序, 根据传入的新 columns 
       const headerRow = scrollContainer.querySelector('.sticky-header') as HTMLDivElement | null
+      const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
+      const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
+      
       if (headerRow) {
         const cells = Array.from(headerRow.querySelectorAll<HTMLDivElement>('.table-cell'))
         const map = new Map<string, HTMLDivElement>()
@@ -289,8 +293,6 @@ export function mountTableShell(params: {
         renderer.applyFrozenStyles(headerRow)
       }
 
-      // 2. 重排 summary
-      const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
       if (summaryRow) {
         const cells = Array.from(summaryRow.querySelectorAll<HTMLDivElement>('.table-cell'))
         const map = new Map<string, HTMLDivElement>()
@@ -302,7 +304,6 @@ export function mountTableShell(params: {
         summaryRow.innerHTML = ''        
         columns.forEach((col, index) => {
           let cell = map.get(col.key)
-          // 若单元格不存在, 则创建新的
           if (!cell) {
            cell = renderer.createSummaryCell(col, index)
           }
@@ -312,10 +313,9 @@ export function mountTableShell(params: {
         renderer.applyFrozenStyles(summaryRow)
       }
 
-      // 3. 更新数据行
+      // 数据行只需重新应用冻结列样式
       if (config.frozenColumns > 0) {
         requestAnimationFrame(() => {
-          const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
           dataRows.forEach(row => {
             renderer.applyFrozenStyles(row)
           })
