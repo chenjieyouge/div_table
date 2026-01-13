@@ -8,13 +8,14 @@ import { bootstrapTable } from '@/table/data/bootstrapTable'
 import { VirtualViewport } from '@/table/viewport/VirtualViewport'
 import type { ITableShell } from '@/table/TableShell'
 import { mountTableShell } from '@/table/TableShell'
-
 import type { TableStore } from '@/table/state/createTableStore'
 import type { TableAction, TableState } from '@/table/state/types'
 import type { IColumn } from '@/types'
 import { createTableStore } from '@/table/state/createTableStore'
 import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnModel'
 import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
+import { ColumnManager } from '@/table/core/ColumnManager'
+
 
 
 // 主协调者, 表格缝合怪;  只做调度, 不包含业务逻辑
@@ -34,6 +35,7 @@ export class VirtualTable {
   private originalColumns!: IColumn[]
   private unsubscribleStore: (() => void) | null = null 
   private widthStorage: ColumnWidthStorage | null = null  // 列宽存储
+  private columnManager!: ColumnManager // 列统一管理器
 
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
@@ -320,6 +322,13 @@ export class VirtualTable {
       virtualContent: this.shell.virtualContent
     })
 
+    // 初始化 ColumnManager 统一列管理
+    this.columnManager = new ColumnManager(
+      this.config,
+      this.renderer,
+      this.dataManager
+    )
+
     // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
     this.shell.bindScroll(() => {
       this.viewport.updateVisibleRows()
@@ -429,21 +438,15 @@ export class VirtualTable {
     if (action.type === 'COLUMN_HIDE' || 
        action.type === 'COLUMN_SHOW') {
       // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
-      // this.rebuild()
       this.applyColumnsFromState()
-      // 更新列宽, 列顺序(移除隐藏列), viewport 列配置
+      // 用 ColumnManager 统一更新
+      this.columnManager.updateColumns(this.config.columns, {
+        headerRow: this.shell.scrollContainer.querySelector('.sticky-header') as HTMLDivElement,
+        summaryRow: this.shell.scrollContainer.querySelector('.sticky-summary') as HTMLDivElement,
+        dataRows: Array.from(this.shell.scrollContainer.querySelectorAll<HTMLDivElement>('.virtual-row'))
+      })
+      // 更新列宽 
       this.shell.updateColumnWidths(this.config.columns)
-      this.shell.updateColumnOrder(this.config.columns)
-      this.viewport.updateColumnOrder(this.config.columns)
-      // 保存隐藏列状态到 localStorage 
-      if (this.widthStorage) {
-        const hiddenKeys = this.store.getState().columns.hiddenKeys
-        // 可选: 持久化 (当前感觉没有必要)
-        
-        // localStorage.setItem(`table_hidden_keys_${this.config.tableHeight} || 'default`,
-        //   JSON.stringify(hiddenKeys)
-        // )
-      }
       return 
     }
 
@@ -451,13 +454,16 @@ export class VirtualTable {
     if (action.type === 'COLUMN_BATCH_HIDE' || 
        action.type === 'COLUMN_BATCH_SHOW' ||
        action.type === 'COLUMNS_RESET_VISIBILITY') {
-      // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
-      // this.rebuild()
+      // 更新最新配置
       this.applyColumnsFromState()
-      // 更新列宽, 列顺序(移除隐藏列), viewport 列配置
+      // 用 ColumnManager 统一更新
+      this.columnManager.updateColumns(this.config.columns, {
+        headerRow: this.shell.scrollContainer.querySelector('.sticky-header') as HTMLDivElement,
+        summaryRow: this.shell.scrollContainer.querySelector('.sticky-summary') as HTMLDivElement,
+        dataRows: Array.from(this.shell.scrollContainer.querySelectorAll<HTMLDivElement>('.virtual-row'))
+      })
+      // 更新列宽 
       this.shell.updateColumnWidths(this.config.columns)
-      this.shell.updateColumnOrder(this.config.columns)
-      this.viewport.updateColumnOrder(this.config.columns)
       return 
     }
 

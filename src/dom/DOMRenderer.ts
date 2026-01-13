@@ -323,20 +323,35 @@ export class DOMRenderer {
 
   // 辅助方法: 统一应用冻结列样式和位置
   public applyFrozenStyles(row: HTMLDivElement): void {
+    // 优先用 css 变量, 避免用 getBoundingClientRect() 产生重排
     const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
-    let leftOffset = 0
-
     cells.forEach((cell, index) => {
-      // 先移除列样式, 保证纯净
-      cell.classList.remove('cell.frozen')
+      const key = cell.dataset.columnKey
+      // 先移除所有冻结列样式
+      cell.classList.remove('cell-frozen')
       cell.style.left = ''
-      // 根据列索引, 重新应用冻结列样式
-      if (index < this.config.frozenColumns) {
-        cell.classList.add('cell.frozen')
-        cell.style.left = `${leftOffset}px`
-        leftOffset += cell.getBoundingClientRect().width
+      // 根据所有重新应用冻结列样式
+      if (index < this.config.frozenColumns && key) {
+        cell.classList.add('cell-frozen')
+        // 优先使用 css 变量, 比 getBoundingClientRect 性能更好
+        cell.style.left = `var(--col-${key}-left, 0px)`
       }
     })
+
+    // const cells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
+    // let leftOffset = 0
+
+    // cells.forEach((cell, index) => {
+    //   // 先移除列样式, 保证纯净
+    //   cell.classList.remove('cell.frozen')
+    //   cell.style.left = ''
+    //   // 根据列索引, 重新应用冻结列样式
+    //   if (index < this.config.frozenColumns) {
+    //     cell.classList.add('cell.frozen')
+    //     cell.style.left = `${leftOffset}px`
+    //     leftOffset += cell.getBoundingClientRect().width
+    //   }
+    // })
   }
   
 

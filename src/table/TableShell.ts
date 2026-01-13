@@ -236,23 +236,34 @@ export function mountTableShell(params: {
     },
     updateColumnWidths(columns) {
       // 只更新变量, 不重建 DOM, 这个拖拽宽度问题引发了我一系列的崩盘, 为了用户体验值了!
-      for (const col of columns) {
-        scrollContainer.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
-      }
-      // 更新 table-wrapper 总宽, 不然会出现列挤压的情况!
+      let leftOffset = 0
+      columns.forEach((col, index) => {
+        // 设置列宽 css 变量
+        tableWrapper.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
+        // 设置冻结列偏移量 css 变量
+        if (index < config.frozenColumns) {
+          tableWrapper.style.setProperty(`--col-${col.key}-left`, `${leftOffset}px`)
+          leftOffset += col.width
+        }
+      }) 
+      // 更新表格总宽度
       const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
       tableWrapper.style.width = `${totalWidth}px`
 
-      // 简单粗暴:直接读取实际渲染宽度,重新设置冻结列 left
-    if (config.frozenColumns > 0) {
-      requestAnimationFrame(() => {
-        updateFrozenLeft(headerRow, config.frozenColumns)
-        const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
-        if (summaryRow) updateFrozenLeft(summaryRow, config.frozenColumns)
-        const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
-        dataRows.forEach(row => updateFrozenLeft(row, config.frozenColumns))
-      })
-    }
+      // 使用 css 变量后, 只需更新一次样式类即可
+      if (config.frozenColumns > 0) {
+        requestAnimationFrame(() => {
+
+          const headerRow = scrollContainer.querySelector('.sticky-header') as HTMLDivElement | null 
+          if (headerRow) renderer.applyFrozenStyles(headerRow)
+
+          const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
+          if (summaryRow) renderer.applyFrozenStyles(summaryRow)
+
+          const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
+          dataRows.forEach(row => renderer.applyFrozenStyles(row))
+        })
+      }
     },
     updateColumnOrder(columns) {
       // 1. 重排 header 顺序, 根据传入的新 columns 
