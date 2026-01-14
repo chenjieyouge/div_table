@@ -17,6 +17,7 @@ export interface ITableShell {
   scrollContainer: HTMLDivElement
   virtualContent: HTMLDivElement
   summaryRow?: HTMLDivElement
+  headerRow: HTMLDivElement // 缓存表头引用
 
   setScrollHeight(scroller: VirtualScroller): void // 统一更新滚动高度
   setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void // 统一控制排序箭头
@@ -224,6 +225,7 @@ export function mountTableShell(params: {
     scrollContainer,
     virtualContent,
     summaryRow,
+    headerRow,  // 对外暴露 headerRow 引用
 
     setScrollHeight(scroller: VirtualScroller) {
       dataContainer.style.height = `${scroller.getActualScrollHeight()}px`
@@ -253,11 +255,8 @@ export function mountTableShell(params: {
       // 使用 css 变量后, 只需更新一次样式类即可
       if (config.frozenColumns > 0) {
         requestAnimationFrame(() => {
-
-          const headerRow = scrollContainer.querySelector('.sticky-header') as HTMLDivElement | null 
+          // 使用缓存 dom 引用, 不重复查询
           if (headerRow) renderer.applyFrozenStyles(headerRow)
-
-          const summaryRow = scrollContainer.querySelector('.sticky-summary') as HTMLDivElement | null
           if (summaryRow) renderer.applyFrozenStyles(summaryRow)
 
           const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')

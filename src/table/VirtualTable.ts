@@ -423,10 +423,10 @@ export class VirtualTable {
     if (action.type === 'COLUMN_ORDER_SET') {
       // 拖拽列顺序调整, 不用 rebuild, 增量更新即可
       this.applyColumnsFromState() // 先更新列状态
-      // 用 ColumnManager 统一更新
+      // 用 ColumnManager 统一更新, 并使用 shell 的缓存 DOM 引用, 减少重复查询
       this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.scrollContainer.querySelector('.sticky-header') as HTMLDivElement,
-        summaryRow: this.shell.scrollContainer.querySelector('.sticky-summary') as HTMLDivElement,
+        headerRow: this.shell.headerRow, 
+        summaryRow: this.shell.summaryRow,
         dataRows: Array.from(this.shell.virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row'))
       })
       // 更新列宽, 同时会设置 css 变量
@@ -451,10 +451,10 @@ export class VirtualTable {
        action.type === 'COLUMN_SHOW') {
       // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
       this.applyColumnsFromState()
-      // 用 ColumnManager 统一更新
+      // 用 ColumnManager 统一更新, 也是使用缓存的 DOM 引用
       this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.scrollContainer.querySelector('.sticky-header') as HTMLDivElement,
-        summaryRow: this.shell.scrollContainer.querySelector('.sticky-summary') as HTMLDivElement,
+        headerRow: this.shell.headerRow,
+        summaryRow: this.shell.summaryRow,
         dataRows: Array.from(this.shell.scrollContainer.querySelectorAll<HTMLDivElement>('.virtual-row'))
       })
       // 更新列宽 
@@ -468,10 +468,10 @@ export class VirtualTable {
        action.type === 'COLUMNS_RESET_VISIBILITY') {
       // 更新最新配置
       this.applyColumnsFromState()
-      // 用 ColumnManager 统一更新
+      // 用 ColumnManager 统一更新, 也是用缓存的 DOM 引用
       this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.scrollContainer.querySelector('.sticky-header') as HTMLDivElement,
-        summaryRow: this.shell.scrollContainer.querySelector('.sticky-summary') as HTMLDivElement,
+        headerRow: this.shell.headerRow,
+        summaryRow: this.shell.summaryRow,
         dataRows: Array.from(this.shell.scrollContainer.querySelectorAll<HTMLDivElement>('.virtual-row'))
       })
       // 更新列宽 

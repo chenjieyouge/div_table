@@ -68,7 +68,6 @@ export class ColumnManager {
     // 更新表头行
     const existingCells = Array.from(row.querySelectorAll<HTMLDivElement>('.table-cell'))
     const cellMap = new Map<string, HTMLDivElement>()
-
     // 把将要被更新的表头行的每个单元格组成 map: <key: cell>{}
     existingCells.forEach(cell => {
       const key = cell.dataset.columnKey
@@ -78,13 +77,17 @@ export class ColumnManager {
     })
     // 清空行, 然后开始重建
     row.innerHTML = ''
+    // 性能优化: 使用 DocumentFragment 容器先装好, 然后一次性批量插入
+    const fragment = document.createDocumentFragment()
     columns.forEach((col, index) => {
       let cell = cellMap.get(col.key) // 更新值, 没有则重建
       if (!cell) {
         cell = this.renderer.createHeaderCell(col, index)
       }
-      row.appendChild(cell)
+      fragment.appendChild(cell)
     })
+    // 只触发一次 reflow
+    row.appendChild(fragment)
     // 应用冻结列样式
     this.renderer.applyFrozenStyles(row)
   }
@@ -98,17 +101,20 @@ export class ColumnManager {
       const key = cell.dataset.columnKey
       if (key) cellMap.set(key, cell)
     })
-    // 清空再更新
+    // 清空再更新, 也用 DocumentFragment 容器先装, 后批量插入
     row.innerHTML = ''
+    const fragment = document.createDocumentFragment()
     columns.forEach((col, index) => {
       let cell = cellMap.get(col.key)  // 更新值, 没有则重建
       if (!cell) {
         cell = this.renderer.createSummaryCell(col, index)
       }
-      row.appendChild(cell)
+      // 每次都先装入 fg 容器里面
+      fragment.appendChild(cell)
     })
-    // 应用冻结列样式
-    this.renderer.applyFrozenStyles(row)
+    // 最后再一次批量插入, reflow 1次就好
+    row.appendChild(fragment)
+    this.renderer.applyFrozenStyles(row)  // 应用冻结列样式
   }
 
   private updateDataRows(rows: HTMLDivElement[], columns: IColumn[]): void {
@@ -126,17 +132,18 @@ export class ColumnManager {
       const rowData = this.dataManager.getRowData(rowIndex)
       // 先清空, 再更新
       row.innerHTML = ''
+      const fragment = document.createDocumentFragment()
       columns.forEach((col, index) => {
         let cell = cellMap.get(col.key) // 根据 key 获取新值
         if (!cell && rowData) {
           cell = this.renderer.createDataCell(col, rowData, rowIndex, index)
         }
         if (cell) {
-          row.appendChild(cell)
+          fragment.appendChild(cell)
         }
       })
-      // 应用冻结列样式
-      this.renderer.applyFrozenStyles(row)
+      row.appendChild(fragment)
+      this.renderer.applyFrozenStyles(row) // 应用冻结列样式
     })
   }
 

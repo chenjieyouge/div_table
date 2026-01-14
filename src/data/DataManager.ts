@@ -197,6 +197,38 @@ export class DataManager {
     this.pageCache.clear() // 排序后, 清除数据缓存
   }
 
+  // 辅助方法: 统一的筛选匹配逻辑
+  public matchesFilters(row: Record<string, any>, columnFilters: Record<string, ColumnFilterValue>): boolean {
+    for (const key in columnFilters) {
+      const filter = columnFilters[key]
+      const cellVal = row[key]
+      // 按类型分别匹配
+      if (filter.kind === 'set') {
+        if (filter.values.length === 0) continue 
+        if (!filter.values.includes(String(cellVal ?? ''))) return false 
+
+      } else if (filter.kind === 'text') {
+        if (!filter.value) continue
+        if (!String(cellVal ?? '').toLowerCase().includes(filter.value.toLowerCase())) {
+          return false 
+        }
+
+      } else if (filter.kind === 'dateRange') {
+        const dateStr = String(cellVal ?? '') // 日期字符串比较不确定是否对
+        if (filter.start && dateStr < filter.start) return false 
+        if (filter.end && dateStr > filter.end) return false 
+
+      } else if (filter.kind === 'numberRange') {
+        const num = Number(cellVal)
+        if (isNaN(num)) return false 
+        if (filter.min !== undefined && num < filter.min) return false 
+        if (filter.max !== undefined && num > filter.max) return false
+
+      } // else if 未来可能还有其他值类型
+    }
+    return true
+  }
+
   // client 筛选 (仅内存模式用), 支持 set/text/dateRange/numRange 筛选
   public filterData(params: {
     globalText?: string 
@@ -212,36 +244,8 @@ export class DataManager {
         String(val).toLowerCase().includes(globalText.toLowerCase()))
         if (!match) return false
       }
-
-      // 列值筛选, 支持 set/text/dateRange/numRange 类型
-      for (const key in columnFilters) {
-        const filter = columnFilters[key]
-        const cellVal = row[key]
-        // 按类型分别匹配
-        if (filter.kind === 'set') {
-          if (filter.values.length === 0) continue 
-          if (!filter.values.includes(String(cellVal ?? ''))) return false 
-
-        } else if (filter.kind === 'text') {
-          if (!filter.value) continue
-          if (!String(cellVal ?? '').toLowerCase().includes(filter.value.toLowerCase())) {
-            return false 
-          }
-
-        } else if (filter.kind === 'dateRange') {
-          const dateStr = String(cellVal ?? '') // 日期字符串比较不确定是否对
-          if (filter.start && dateStr < filter.start) return false 
-          if (filter.end && dateStr > filter.end) return false 
-
-        } else if (filter.kind === 'numberRange') {
-          const num = Number(cellVal)
-          if (isNaN(num)) return false 
-          if (filter.min !== undefined && num < filter.min) return false 
-          if (filter.max !== undefined && num > filter.max) return false
-
-        } // else if 未来可能还有其他值类型
-      }
-      return true  // 最终返回的就是 boolean 表示是否显示该行
+      // 使用统一的筛选逻辑
+      return this.matchesFilters(row, columnFilters)
     })
     this.pageCache.clear()
   }
@@ -270,35 +274,8 @@ export class DataManager {
           )
           if (!match) return false
         }
-        // 遍历每行的每个单元格去判断, 支持 set/text/dateRange/numberRange 等类型
-        for (const key in columnFilters) {
-          // 和排序部分的逻辑是重复的, 后面可以抽离一个公共方方法
-          const filter = columnFilters[key]
-          const cellVal = row[key]
-
-          if (filter.kind === 'set') {
-            if (filter.values.length === 0) continue
-            if (!filter.values.includes(String(cellVal ?? ''))) return false 
-
-          } else if (filter.kind === 'text') {
-            if (!filter.value) continue
-            if (!String(cellVal ?? '').toLowerCase().includes(filter.value.toLowerCase())) {
-              return false 
-            }
-
-          } else if (filter.kind === 'dateRange') {
-            const dateStr = String(cellVal ?? '') // 字符比较未来可能有问题, 暂时先这样
-            if (filter.start && dateStr < filter.start) return false 
-            if (filter.end && dateStr > filter.end) return false 
-
-          } else if (filter.kind === 'numberRange') {
-            const num = Number(cellVal)
-            if (filter.min !== undefined && num < filter.min) return false 
-            if (filter.max !== undefined && num > filter.max) return false 
-
-          } // else if 未来其他值类型
-        }
-        return true 
+        // 使用统一的筛选逻辑
+        return this.matchesFilters(row, columnFilters)
       })
     }
     this.pageCache.clear()
