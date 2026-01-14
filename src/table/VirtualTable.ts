@@ -15,6 +15,7 @@ import { createTableStore } from '@/table/state/createTableStore'
 import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnModel'
 import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
 import { ColumnManager } from '@/table/core/ColumnManager'
+import { PerformanceMonitor } from '@/utils/PerformanceMonitor'
 
 
 
@@ -67,6 +68,11 @@ export class VirtualTable {
 
     // 启动异步初始化流程
     this.initializeAsync()
+
+    // 开发模式下, 开启性能监控
+    if (process.env.NODE_ENV === 'development') {
+      PerformanceMonitor.enable()
+    }
   }
 
   // 对外暴露当前表格 state 状态, 后续做 vue 封装会很需要
@@ -398,16 +404,30 @@ export class VirtualTable {
     this.config.frozenColumns = state.columns.frozenCount
   }
 
+  // 列操作的统一更新逻辑
+  private updateColumnUI() {
+    // 性能监控
+    PerformanceMonitor.measure('列更新', () => {
+      this.applyColumnsFromState()
+      // 用 ColumnManager 统一更新, 并使用 shell 的缓存 DOM 引用, 减少重复查询
+      this.columnManager.updateColumns(this.config.columns, {
+        headerRow: this.shell.headerRow, 
+        summaryRow: this.shell.summaryRow,
+        dataRows: this.viewport.getVisibleRows()
+      })
+      // 更新列宽, 同时会设置 css 变量
+      this.shell.updateColumnWidths(this.config.columns, this.viewport.getVisibleRows())
+      })
+  }
+
   // state 变化后的统一入口 (里程碑A的 "表格骨架核心"), 作为触发动作执行的最后一步
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
     // 拦截每个动作判断是 increamental update, 还是只能 rebuild
     if (action.type === 'COLUMN_WIDTH_SET') {
       // 拖拽列宽调整, 不用 rebuild, 增量更新即可
       this.applyColumnsFromState()
-      // 清除缓存
-      this.columnManager.clearCache()
       // 更新列宽 css 变量
-      this.shell.updateColumnWidths(this.config.columns)
+      this.shell.updateColumnWidths(this.config.columns, this.viewport.getVisibleRows())
       
       // 保存列宽到 localStorage
       if (this.widthStorage) {
@@ -422,17 +442,8 @@ export class VirtualTable {
 
     if (action.type === 'COLUMN_ORDER_SET') {
       // 拖拽列顺序调整, 不用 rebuild, 增量更新即可
-      this.applyColumnsFromState() // 先更新列状态
-      // 用 ColumnManager 统一更新, 并使用 shell 的缓存 DOM 引用, 减少重复查询
-      this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.headerRow, 
-        summaryRow: this.shell.summaryRow,
-        dataRows: this.viewport.getVisibleRows()
-      })
-      // 更新列宽, 同时会设置 css 变量
-      this.shell.updateColumnWidths(this.config.columns)
-
-      // 直接保存当前列顺序到 localStorage
+      this.updateColumnUI()
+      // 保存当前列顺序到 localStorage
       if (this.widthStorage) {
         const columnKeys = this.config.columns.map(col => col.key)
         this.widthStorage.saveColumnOrder(columnKeys)
@@ -447,18 +458,9 @@ export class VirtualTable {
     }
 
     // 单列-显示隐藏操作
-    if (action.type === 'COLUMN_HIDE' || 
-       action.type === 'COLUMN_SHOW') {
+    if (action.type === 'COLUMN_HIDE' || action.type === 'COLUMN_SHOW') {
       // 隐藏列必须要增量更新, 若暴力 rebuild 则会导致列配置面板闪退!
-      this.applyColumnsFromState()
-      // 用 ColumnManager 统一更新, 也是使用缓存的 DOM 引用
-      this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.headerRow,
-        summaryRow: this.shell.summaryRow,
-        dataRows: this.viewport.getVisibleRows()
-      })
-      // 更新列宽 
-      this.shell.updateColumnWidths(this.config.columns)
+      this.updateColumnUI()
       return 
     }
 
@@ -467,15 +469,7 @@ export class VirtualTable {
        action.type === 'COLUMN_BATCH_SHOW' ||
        action.type === 'COLUMNS_RESET_VISIBILITY') {
       // 更新最新配置
-      this.applyColumnsFromState()
-      // 用 ColumnManager 统一更新, 也是用缓存的 DOM 引用
-      this.columnManager.updateColumns(this.config.columns, {
-        headerRow: this.shell.headerRow,
-        summaryRow: this.shell.summaryRow,
-        dataRows: this.viewport.getVisibleRows()
-      })
-      // 更新列宽 
-      this.shell.updateColumnWidths(this.config.columns)
+      this.updateColumnUI()
       return 
     }
 

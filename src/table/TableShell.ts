@@ -20,11 +20,12 @@ export interface ITableShell {
   headerRow: HTMLDivElement // 缓存表头引用
 
   setScrollHeight(scroller: VirtualScroller): void // 统一更新滚动高度
-  setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void // 统一控制排序箭头
+  // 统一控制排序箭头
+  setSortIndicator(sort: { key: string, direction: 'asc' | 'desc' } | null): void 
   bindScroll(onRafScroll: () => void): void // 绑定滚动, 内部 raf, 外部只传要做什么
-  destroy(): void // 释放所有事件, 清空 dom 
-  updateColumnWidths(columns: IConfig['columns']): void  // 增量更新列宽 (css 变量)
-
+  // 增量更新列宽 (css 变量), 顺带将 dataRows 也捎过来呗
+  updateColumnWidths(columns: IConfig['columns'], dataRows?: HTMLDivElement[]): void  
+  destroy(): void
 }
 
 export function mountTableShell(params: {
@@ -234,8 +235,7 @@ export function mountTableShell(params: {
     bindScroll(onRafScroll: () => void) {
       scrollBinder.bind(scrollContainer, onRafScroll)
     },
-    updateColumnWidths(columns) {
-      // 只更新变量, 不重建 DOM, 这个拖拽宽度问题引发了我一系列的崩盘, 为了用户体验值了!
+    updateColumnWidths(columns, dataRows) {
       let leftOffset = 0
       columns.forEach((col, index) => {
         // 设置列宽 css 变量
@@ -249,17 +249,15 @@ export function mountTableShell(params: {
       // 更新表格总宽度
       const totalWidth = columns.reduce((sum, col) => sum + col.width, 0)
       tableWrapper.style.width = `${totalWidth}px`
-
       // 使用 css 变量后, 只需更新一次样式类即可
       if (config.frozenColumns > 0) {
-        requestAnimationFrame(() => {
-          // 使用缓存 dom 引用, 不重复查询
-          if (headerRow) renderer.applyFrozenStyles(headerRow)
-          if (summaryRow) renderer.applyFrozenStyles(summaryRow)
-
-          const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
-          dataRows.forEach(row => renderer.applyFrozenStyles(row))
-        })
+        // 直接同步执行更新, 不用异步 requestAnimationFrame, 避免页面闪烁
+        if (headerRow) renderer.applyFrozenStyles(headerRow)
+        if (summaryRow) renderer.applyFrozenStyles(summaryRow)
+        // 使用从 VirtualTable 中捎带过来的 dataRows, 若没有则查询兜底呗
+        // const dataRows = virtualContent.querySelectorAll<HTMLDivElement>('.virtual-row')
+        const rows = dataRows!
+        rows.forEach(row => renderer.applyFrozenStyles(row))
       }
     },
     // 其他更多回调函数拓展...
