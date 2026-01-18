@@ -45,7 +45,14 @@ export class DemoPanel implements IPanel {
   }
 
   public onShow(): void {
-    console.log('[DemoPanel] 面板展示中')
+    console.log('[DemoPanel] 面板展示中...')
+
+    // 添加防御性检查, 因为可能此时还拿不到 store
+    if (!this.store) {
+      console.error('[DemoPanel] store 未初始化, 无法订阅哦!')
+      return
+    }
+
     // 订阅 store 变化, 实时更新状态
     this.unsubscribe = this.store.subscribe(() => {
       this.updateState()
@@ -61,6 +68,12 @@ export class DemoPanel implements IPanel {
   }
 
   private updateState(): void {
+    // 防御性检查 store 可能还没数据
+    if (!this.store) {
+      console.error('[DemoPanel] store 未初始化, 无法订阅哦!')
+      return
+    }
+
     const state = this.store.getState()
     const stateEl = this.container.querySelector('#demo-panel-state')
     if (stateEl) {

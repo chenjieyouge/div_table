@@ -11,7 +11,7 @@ export class TableConfig {
     ConfigValidator.vilidate(userConfig)
     // 2. 合并默认值 + 用户配置
     this.config = { 
-      ...createDefaultConfig,
+      ...createDefaultConfig(),
       ...userConfig,
       tableId: userConfig.tableId || this.generateTableId(userConfig),
      } as IConfig

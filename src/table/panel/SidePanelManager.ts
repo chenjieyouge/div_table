@@ -76,8 +76,16 @@ export class SidePanelManager {
 
   // 显示指定面板
   public showPanel(id: string): void {
+    // 验证 store 是否存在
+    if (!this.store) {
+      console.error('[SidePanelManager] store 未初始化,无法显示面板')
+      return 
+    }
     // 未注册, 就是当前面板, 则不用处理
-    if (!this.registry.has(id)) return 
+    if (!this.registry.has(id)) {
+      console.warn(`[SidePanelManager] 面板 "${id}" 未注册`)
+      return 
+    }
     if  (this.activePanel === id) return 
     // 1. 隐藏当前活跃面板
     if (this.activePanel) {

@@ -203,8 +203,23 @@ export class VirtualTable {
 }
 
   // 挂载 shell + viewport (暴力 rebuild 会重复调用它)
-  public mount(containerSelector?: string): void {
-    // 1. 确认容器存在
+  private mount(containerSelector?: string): void {
+    // 0. 防止重复挂载
+    if (this.shell) {
+      console.warn('[VirtualTable] 检测到重复挂载, 先清理旧实例')
+      // 清理旧的实例, 允许重新挂载
+      this.shell?.destroy()
+      this.viewport?.destroy()
+      // return 
+    }
+
+    // 1. 检查 store 是否已初始化
+    if (!this.store) {
+      console.error('[VirtualTable] store 未初始化, 无法挂载表格!')
+      throw new Error('[VirtualTable] mount() 必须在 store 初始化后调用!')
+    }
+
+    // 2. 确认容器存在
     const selector = containerSelector || this.config.container
     const containerEl = typeof selector === 'string'
       ? document.querySelector<HTMLDivElement>(selector)
@@ -213,13 +228,18 @@ export class VirtualTable {
     if (!containerEl) {
       throw new Error(`[VirtualTable] 容器未找到: ${selector}`)
     }
-    // 2. 判断是否启用右侧面板, !! 强制转为 boolean
+    // 3. 清空容器, 避免内容重复
+    containerEl.innerHTML = ''
+    // 4. 添加唯一标识, 表格实例样式隔离
+    containerEl.setAttribute('data-table-id', this.config.tableId)
+    containerEl.classList.add('virtual-table-instance')
+    // 5. 判断是否启用右侧面板, !! 强制转为 boolean
     const hasSidePanel = !!(
       this.config.sidePanel?.enabled &&
       this.config.sidePanel?.panels &&
       this.config.sidePanel.panels.length > 0 
     )
-    // 3. 提取公共的 mountTableShell 参数, 减少代码重复
+    // 6. 提取公共的 mountTableShell 参数, 减少代码重复
     const commonShellParams = {
       config: this.config,
       renderer: this.renderer,
@@ -338,10 +358,10 @@ export class VirtualTable {
       // 后续更多回调拓展... virtual -> shell -> binder -> view 
     }
 
+    // 7. 根据是否有右侧面板, 选择不同的布局方式
     if (hasSidePanel) {
       // 类型守卫 和用 ?? 来提供默认值
       const sp = this.config.sidePanel!
-
       // ======== 有右侧面板: 使用 LayoutManager 布局 =============
       this.layoutManager = new LayoutManager(this.config, {
         mode: 'desktop',
@@ -357,7 +377,7 @@ export class VirtualTable {
       containerEl.appendChild(layoutContainer)
       // 创建右侧面板管理器, sp.panels 就一定存在
       this.sidePanelManager = new SidePanelManager(
-        this.store,
+        this.store, // 此时 store 可能还没有有值哦!
         sp.panels
       )
       // 将面板管理器挂载到右侧区域
@@ -365,14 +385,7 @@ export class VirtualTable {
       if (sideArea) {
         sideArea.appendChild(this.sidePanelManager.getContainer())
       }
-      // 显示默认面板
-      if (sp.defaultPanel) {
-        this.sidePanelManager.showPanel(sp.defaultPanel)
-
-      } else if (sp.panels.length > 0) {
-        this.sidePanelManager.showPanel(sp.panels[0].id)
-      }
-      // 关键: TableShell 挂载到主区域, 并传入所有回调
+      // 关键: 挂载 table 到 mainArea, 并传入所有回调, 注意右侧面板先不要调用哦!
       const mainArea = this.layoutManager.getMainArea()!
       this.shell = mountTableShell({
         ...commonShellParams, // 展开所有公共参数
@@ -386,36 +399,47 @@ export class VirtualTable {
         ...commonShellParams, // 展开所有公共参数
         container: containerEl
       })
+    }
 
-      // ============ 后续逻辑: (两种模式都需要) ==============
-      // 首次挂载后, 就立刻同步一次滚动高度
-      this.shell.setScrollHeight(this.scroller)
-      // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
-      this.viewport = new VirtualViewport({
-        config: this.config,
-        dataManager: this.dataManager,
-        renderer: this.renderer,
-        scroller: this.scroller,
-        scrollContainer: this.shell.scrollContainer,
-        virtualContent: this.shell.virtualContent
-      })
+    // 8. 通用初始化逻辑, 两种模式都需要
+    // 首次挂载后, 就立刻同步一次滚动高度
+    this.shell.setScrollHeight(this.scroller)
+    // 创建 viewport: 将 "可视区更新/骨架行/数据渲染" 的职责下放
+    this.viewport = new VirtualViewport({
+      config: this.config,
+      dataManager: this.dataManager,
+      renderer: this.renderer,
+      scroller: this.scroller,
+      scrollContainer: this.shell.scrollContainer,
+      virtualContent: this.shell.virtualContent
+    })
 
-      // 初始化 ColumnManager 统一列管理
-      this.columnManager = new ColumnManager(
-        this.config,
-        this.renderer,
-        this.dataManager
-      )
+    // 初始化 ColumnManager 统一列管理
+    this.columnManager = new ColumnManager(
+      this.config,
+      this.renderer,
+      this.dataManager
+    )
 
-      // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
-      this.shell.bindScroll(() => {
-        this.viewport.updateVisibleRows()
-      })
+    // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
+    this.shell.bindScroll(() => {
       this.viewport.updateVisibleRows()
+    })
+    // 首次渲染数据
+    this.viewport.updateVisibleRows()
+    // 首次挂载后, 立即刷新一次总结行数据
+    if (this.config.showSummary) {
+      this.refreshSummary().catch(console.warn)
+    }
 
-      // 首次挂载后, 立即刷新一次总结行数据
-      if (this.config.showSummary) {
-        this.refreshSummary().catch(console.warn)
+    // 9. 最后显示默认面板 (使用微任务延迟,(可选)确保所有初始化完成)
+    if (hasSidePanel && this.sidePanelManager) {
+      const sp = this.config.sidePanel!
+      // 直接调用, 不需要 setTimeout
+      if (sp.defaultPanel) {
+        this.sidePanelManager?.showPanel(sp.defaultPanel)
+      } else if (sp.panels.length > 0) {
+        this.sidePanelManager?.showPanel(sp.panels[0].id)
       }
     }
   }
