@@ -1,3 +1,5 @@
+import type { IPanelConfig } from "@/table/panel/IPanel"
+
 // 列筛选类型 (目前支持 4 种)
 export type ColumnFilterType = 'set' | 'text' | 'dateRange' | 'numberRange'
 
@@ -99,7 +101,18 @@ export interface IUserConfig extends Partial<ITableCallbacks> {
 
   initialData?: Record<string, any>[] // 全量数据
   fetchAllData?: () => Promise<Record<string, any>[]>
+  sidePanel?: Partial<SidePanelConfig> // 右侧面板配置 (可选)
 }
+
+// 右侧面板配置
+export interface SidePanelConfig {
+  enabled: boolean // 是否启用右侧面板
+  position?: 'left' | 'right'  // 面板位置默认 right
+  width?: number // 面板宽度, 默认 250px
+  defaultPanel?: string // 默认显示面板 id 
+  panels: IPanelConfig[] // 要启用的面板列表
+}
+
 
 // 对内: 使用严格完整配置
 // 注意: 回调函数保持可选, 因为它们也不是 "必需配置", 可选都放在 Omit 中
@@ -121,3 +134,4 @@ export interface IConfig
       'fetchSummaryData' | 'fetchPageData' | 'initialData' | 'fetchAllData' | 'fetchFilterOptions'
     >,
     ITableCallbacks {}
+
