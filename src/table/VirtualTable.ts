@@ -22,6 +22,8 @@ import type { ActionContext } from '@/table/handlers/ActionHandlers'
 import { LayoutManager } from '@/table/layout/LayoutManager'
 import { SidePanelManager } from '@/table/panel/SidePanelManager'
 import type { IPanelConfig } from '@/table/panel/IPanel'
+// 回调函数抽离
+import { ShellCallbacks } from '@/table/handlers/ShellCallbacks'
 
 
 
@@ -107,35 +109,41 @@ export class VirtualTable {
 
   // 异步初始化
   private async initializeAsync() {
+    // ======= server 模式 渲染流程 ===========
+    // 0. server 模式渲染准备前期工作
+
     // server 模式下, 不要 await 首次请求, 否则 mount 被阻塞, 会白屏无数据
     const isServerBootstrap = !this.config.initialData && typeof this.config.fetchPageData === 'function'
     try {
       if (isServerBootstrap) {
-        // 1. 先按 server 模式将 "骨架表格" 挂出来
+        // 先按 server 模式将 "骨架表格" 挂出来
         this.mode = 'server'
         // totalRows 先用默认值, 等有数真实数据再替换回来
         assertUniqueColumnKeys(this.config.columns) // 列 key 唯一校验
         this.originalColumns = [...this.config.columns]
 
+        // 1. 创建 store
         this.store = createTableStore({
           columns: this.originalColumns,
           mode: this.mode,
           frozenCount: this.config.frozenColumns
         })
-        
-        this.syncColumnOrderToState() // 同步顺序到 state
+        // 2. 同步列顺序 到 state
+        this.syncColumnOrderToState()
+        // 3. 订阅 state 变化
         this.unsubscribleStore?.()
         this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
-          this.handleStateChange(next, prev, action)
+          this.handleStateChange(next, prev, action) 
         })
-
-        this.applyColumnsFromState() 
-        this.mount() // 挂载渲染骨架屏
-
+        // 4. 应用列配置
+        this.applyColumnsFromState()
+        // 5. 挂载 DOM (会创建 ColumnManager)
+        this.mount() // 这里 ColumnManager 才初始化, 可能导致更新列有问题
+        // 6. 设置排序指示器
         this.shell.setSortIndicator(this.store.getState().data.sort)
         this.config.onModeChange?.(this.mode)
 
-        // 2. ready 可以在 mount 后就 resolve, 此时 dispatch 安全, 数据可能还还在加载
+        // 7. ready 可以在 mount 后就 resolve, 此时 dispatch 安全, 数据可能还还在加载
         this.isReady = true 
         const pending = this.pendingActions
         this.pendingActions = []
@@ -143,7 +151,7 @@ export class VirtualTable {
         this.resolveReady?.()
         this.resolveReady = null 
 
-        // 3. 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
+        // 8. 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
         void this.dataManager.getPageData(0).then(() => {
           const realTotal = this.dataManager.getServerTotalRows()
           if (typeof realTotal === 'number' && realTotal >= 0 && realTotal !== this.config.totalRows) {
@@ -159,32 +167,33 @@ export class VirtualTable {
         return 
       }
 
-    // ======= 原逻辑: client 模式或者 用户传入了 initialData 的情况 ===========
+    // ======= client 模式或者 用户传入了 initialData 的情况 ===========
+
+    // 0. client 模式下, 渲染前准备工作处理
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
     this.mode = mode 
     this.config.totalRows = totalRows
-    // 列 key 必须唯一, 尽早检验, 避免后续列顺序/拖拽状态全乱
-    assertUniqueColumnKeys(this.config.columns)
-    // 保留用户原始列配置, ColumnModel 永远基于它来解析
-    this.originalColumns = [...this.config.columns]
-    // 创建 store (里程碑A: 先非受控模式)
+    assertUniqueColumnKeys(this.config.columns) // 列 key 唯一值校验, 避免排序拖拽等混乱
+    this.originalColumns = [...this.config.columns] // 保留用户原始列配置
+
+    // 1. 创建 store (里程碑A: 先非受控模式)
     this.store = createTableStore({
       columns: this.originalColumns,
       mode: this.mode,
       frozenCount: this.config.frozenColumns
     })
 
-    // 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等)
+    // 2. 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等)
     this.unsubscribleStore?.()
     this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
       this.handleStateChange(next, prev, action)
     })
 
-    // 首次 mount 前, 将 state 解析出来的列, 应用回 config
+    // 3. 应用列配置: 在 mount 前, 将 state 解析出来的列, 应用回 config
     this.applyColumnsFromState()
-    // 挂载 DOM, 会绑定表头点击事件, 滚动事件等
+    // 4. 挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
     this.mount()
-    // 首次将排序指示器对齐到 state, 默认 null 
+    // 5. 设置排序指示器
     this.shell.setSortIndicator(this.store.getState().data.sort)
     this.config.onModeChange?.(this.mode)
 
@@ -202,17 +211,16 @@ export class VirtualTable {
   }
 }
 
-  // 挂载 shell + viewport (暴力 rebuild 会重复调用它)
+  // 挂载 shell + viewport (由 initializeAsync 内部调用)
   private mount(containerSelector?: string): void {
     // 0. 防止重复挂载
     if (this.shell) {
-      console.warn('[VirtualTable] 检测到重复挂载, 先清理旧实例')
+      console.warn('[VirtualTable] 检测到重复挂载, 销毁旧实例')
       // 清理旧的实例, 允许重新挂载
-      this.shell?.destroy()
-      this.viewport?.destroy()
-      // return 
-    }
+      this.remount(containerSelector!)
+      // this.destroy()
 
+    }
     // 1. 检查 store 是否已初始化
     if (!this.store) {
       console.error('[VirtualTable] store 未初始化, 无法挂载表格!')
@@ -239,123 +247,22 @@ export class VirtualTable {
       this.config.sidePanel?.panels &&
       this.config.sidePanel.panels.length > 0 
     )
-    // 6. 提取公共的 mountTableShell 参数, 减少代码重复
+    // 6. 创建回调函数集合, 并提取公共的 mountTableShell 参数
+    const shellCallbacks = new ShellCallbacks(
+      this.config,
+      this.store,
+      this.mode,
+      this.originalColumns,
+      this.widthStorage,
+      (key: string) => this.getClientFilterOptions(key),
+      (summaryRow: HTMLDivElement) => this.loadSummaryData(summaryRow)
+    )
+
     const commonShellParams = {
       config: this.config,
       renderer: this.renderer,
       headerSortBinder: this.headerSortBinder,
-      // 回调函数
-      onToggleSort: (key: string) => {
-        this.store.dispatch({type: 'SORT_TOGGLE', payload: {key}})
-      },
-      onNeedLoadSummary: (summaryRow: HTMLDivElement) => {
-          this.loadSummaryData(summaryRow).catch(console.warn)
-      }, 
-      onColumnResizeEnd: (key: string, width: number) => {
-        this.store.dispatch({ type: 'COLUMN_WIDTH_SET', payload: { key, width}})
-      },
-      onColumnOrderChange: (order: string[]) => {
-        this.store.dispatch({ type: 'COLUMN_ORDER_SET', payload: { order }})
-      },
-      onColumnFilterChange: (key: string, filter: ColumnFilterValue | null) => {
-        if (!filter) {
-          this.store.dispatch({type: 'COLUMN_FILTER_CLEAR', payload: { key } })
-        } else {
-          this.store.dispatch({ type: 'COLUMN_FILTER_SET', payload: {key, filter } })
-        }
-      },
-      getFilterOptions: async (key: string) => {
-        // client 模式 从 originalFullData 推导出可选值 (topN 避免百万次枚举)
-        if (this.mode === 'client') {
-          return this.getClientFilterOptions(key)
-        }
-        // server 模式 若用户提供了 fetchFilterOptions 接口, 就去拉
-        if (this.config.fetchFilterOptions) {
-          const query = this.store.getState().data.query 
-          return this.config.fetchFilterOptions({ key, query})
-        }
-        // 未提供或者没有数据, 则返回空数组 (UI 仍可打开, 但没有选项)
-        return []
-      },
-      getCurrentFilter: (key: string) => {
-        return this.store.getState().data.columnFilters[key]
-      },
-      onTableResizeEnd: (newWidth: number) => {
-        // 更新 portalContainer 宽度
-        const portalContainer = this.shell.scrollContainer.parentElement as HTMLDivElement
-        if (portalContainer && portalContainer.classList.contains('table-portal-container')) {
-          portalContainer.style.width = `${newWidth}px`
-        }
-
-        this.config.tableWidth = newWidth 
-        // 保存整表宽度到 localStorage
-        if (this.widthStorage) {
-          this.widthStorage.saveTableWidth(newWidth)
-        }
-      },
-      getCurrentSort: () => {
-        // 列菜单回调
-        const state = this.store.getState()
-        return state.data.sort
-      },
-      onMenuSort: (key: string, direction: 'asc' | 'desc' | null) => {
-        if (direction === null) {
-          this.store.dispatch({ type: 'SORT_SET', payload: { sort: null }})
-        } else {
-          this.store.dispatch({
-            type: 'SORT_SET',
-            payload: {
-              sort: { key, direction }
-            }
-          })
-        }
-      },
-      // 列管理面板-相关回调
-      getAllColumns: () => {
-        return this.originalColumns // 包含隐藏列都要有
-      },
-      getHiddenKeys: () => {
-        return this.store.getState().columns.hiddenKeys
-      },
-      onColumnToggle: (key: string, visible: boolean) => {
-        // 检查是否冻结列 
-        const colIndex = this.originalColumns.findIndex(c => c.key === key)
-        const isFrozen = colIndex < this.config.frozenColumns 
-        if (isFrozen && !visible) {
-          // 冻结列不让隐藏
-          console.warn('冻结列不允许隐藏')
-          return 
-        }
-        if (visible) {
-          this.store.dispatch({ type: 'COLUMN_SHOW', payload: { key } })
-        } else {
-          this.store.dispatch({ type: 'COLUMN_HIDE', payload: { key } })
-        }
-      },
-      onShowAllColumns: () => {
-        // 批量-显示所有隐藏列
-        const hiddenKeys = this.store.getState().columns.hiddenKeys
-        if (hiddenKeys.length > 0) {
-          this.store.dispatch({
-            type: 'COLUMN_BATCH_SHOW',
-            payload: { keys: hiddenKeys }
-          })
-        }
-      },
-      onHideAllColumns: () => {
-        // 批量-隐藏所有列
-        const allKeys = this.originalColumns.map(col => col.key)
-        this.store.dispatch({
-          type: 'COLUMN_BATCH_HIDE',
-          payload: { keys: allKeys }
-        })
-      },
-      onResetColumns: () => {
-        // 重置, 显示所有列
-        this.store.dispatch({ type: 'COLUMNS_RESET_VISIBILITY' })
-      }
-
-      // 后续更多回调拓展... virtual -> shell -> binder -> view 
+      ...shellCallbacks.getCallbacks() // 展开所有回调函数
     }
 
     // 7. 根据是否有右侧面板, 选择不同的布局方式
@@ -502,6 +409,11 @@ export class VirtualTable {
 
   // 列操作的统一更新逻辑
   private updateColumnUI() {
+    // 防御性检查, server 模式下, 列管理可能还未初始化, 更新个毛线!
+    if (!this.columnManager) {
+      console.warn('[VirtualTable] columnManger 未初始化, 跳过列更新!')
+      return 
+    }
     // 性能监控
     PerformanceMonitor.measure('列更新', () => {
       this.applyColumnsFromState()
@@ -513,7 +425,7 @@ export class VirtualTable {
       })
       // 更新列宽, 同时会设置 css 变量
       this.shell.updateColumnWidths(this.config.columns, this.viewport.getVisibleRows())
-      })
+    })
   }
 
   // state 变化后的统一入口 (里程碑A的 "表格骨架核心"), 作为触发动作执行的最后一步
@@ -707,8 +619,25 @@ export class VirtualTable {
     return this.sidePanelManager?.getActivePanel() ?? null 
   }
 
+  // 重新挂载到容器, 和 清空的区别在于, 保留了 store 订阅
+  public remount(containerSelector: string): void {
+    // dom 都清除, 但 store 订阅保留
+    this.shell?.destroy()
+    this.viewport?.destroy()
+    // 清空布局管理器
+    this.layoutManager?.destroy()
+    this.layoutManager = null 
+    // 清理面板管理器
+    this.sidePanelManager?.destroy()
+    this.sidePanelManager = null 
+    // 重置标记, 先用 any 大法顶上, 后续出问题再说
+    this.shell = null as any 
+    this.viewport = null as any 
+    // 重新挂载
+    this.mount(containerSelector)
+  }
 
-  // 清空, 避免内存泄露
+  // 全部清空, dom + 状态 + 一切, 避免内存泄露
   public destroy() {
     this.unsubscribleStore?.()
     this.unsubscribleStore = null // 解绑 store 订阅
@@ -721,4 +650,6 @@ export class VirtualTable {
     this.sidePanelManager?.destroy()
     this.sidePanelManager = null 
   }
+
+
 }

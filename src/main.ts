@@ -189,12 +189,9 @@ const configLarge: IUserConfig = {
 document.addEventListener('DOMContentLoaded', () => {
   const table = new VirtualTable(configSmall)
   table.ready
-  // 暴露 client 模式的 table 到 window, 方便控制台测试
   if (typeof window !== 'undefined') {
     (window as any).table = table 
   }
-
-
 
   const tableLarge = new VirtualTable(configLarge)
   // ready 后在绑定时间, 避免初始化前调用 sort/filter/dispatch
