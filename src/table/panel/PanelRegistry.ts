@@ -44,15 +44,15 @@ export class PanelRegistry {
     return deleted
   }
 
-  // 创建面板实例: 要传入 id, store
-  public createPanel(id: string, store: TableStore): IPanel {
+  // 创建面板实例: 要传入 id, store, 并支持额外的参数
+  public createPanel(id: string, store: TableStore, ...args: any[]): IPanel {
     // 没注册就不能创建哦
     const config = this.configs.get(id)
     if (!config) {
       throw new Error(`[PanelRegistry] 面板 "${id}" 尚未注册哦!`)
     }
-    // 使用工厂模式创建实例
-    return new config.component(store)
+    // 直接调用 component , 不使用 new 
+    return config.component(store, ...args)
   }
 
   // 获取面板配置, 根据 id

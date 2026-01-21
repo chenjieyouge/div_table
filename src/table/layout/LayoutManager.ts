@@ -41,25 +41,22 @@ export class LayoutManager {
     // 最外层大容器
     this.container = document.createElement('div')
     this.container.className = 'table-layout-container'
-    // 主表格区域
+    // 主表格区域 (占满整个容器)
     this.mainArea = document.createElement('div')
     this.mainArea.className = 'table-layout-main'
     this.container.appendChild(this.mainArea)
-    // 右侧面板区域 (可选)
+    // 右侧面板区域 (绝对定位, 从右侧滑入)
     if (this.layoutConfig.sidePanel) {
       this.sideArea = document.createElement('div')
       this.sideArea.className = 'table-layout-side'
+      // 只设置动态宽度, 其他样式都写在 css 文件中
       this.sideArea.style.width = `${this.layoutConfig.sidePanel.width}px`
-      // 右侧面板下的内容
-      if (this.layoutConfig.sidePanel.position === 'right') {
-        this.container.appendChild(this.sideArea)
-      } else {
-        this.container.insertBefore(this.sideArea, this.mainArea) // 左侧
-      }
-      // 模式是折叠状态
+
+      // 默认隐藏 (向右平移到屏幕外)
       if (!this.layoutConfig.sidePanel.defaultOpen) {
-        this.sideArea.style.display = 'none'
+        this.sideArea.classList.add('collapsed')
       }
+      this.container.appendChild(this.sideArea)
     }
     return this.container
   }
@@ -116,6 +113,32 @@ export class LayoutManager {
     // 移动端自动隐藏右侧面板
     if (mode === 'mobile' && this.sideArea) {
       this.sideArea.style.display = 'none'
+    }
+  }
+
+  // 获取 Tab 栏容器 (独立与面板内容)
+  public getTabsArea(): HTMLDivElement {
+    if (!this.container) return null as any
+    // 查找或创建 Tab 栏容器
+    let tabsArea = this.container.querySelector<HTMLDivElement>('.table-layout-side-tabs')
+    if (!tabsArea) {
+      tabsArea = document.createElement('div')
+      tabsArea.className = 'table-layout-side-tabs'
+      this.container.appendChild(tabsArea)
+    }
+    
+    return tabsArea
+  }
+
+  // 切换面板显示/隐藏
+  public togglePanel(show?: boolean): void {
+    if (!this.sideArea) return 
+    const shouldShow = show ?? this.sideArea.classList.contains('collapsed')
+
+    if (shouldShow) {
+      this.sideArea?.classList.remove('collapsed')
+    } else {
+      this.sideArea.classList.add('collapsed')
     }
   }
 

@@ -16,14 +16,14 @@ export class SidePanelManager {
   private registry: PanelRegistry // 面板注册表
   private panels = new Map<string, IPanel>()  // 已创建的面板实例缓存
   private activePanel: string | null = null // 当前集合的面板 id
-
   private container: HTMLDivElement // 面板容器
-  private tabsContainer!: HTMLDivElement // Tab 切换容器
   private contentContainer!: HTMLDivElement // 面板内容容器
 
   constructor(
     private store: TableStore, 
-    private configs: IPanelConfig[] // 要启用的面板配置
+    private configs: IPanelConfig[], // 要启用的面板配置
+    private tabsContainer: HTMLDivElement,
+    private onPanelToggle?: (show: boolean) => void
   ) {
     this.registry = new PanelRegistry()
     // 注册所有面板
@@ -34,85 +34,99 @@ export class SidePanelManager {
 
   // 渲染面板管理器的 dom 结构
   private render(): HTMLDivElement {
+    // 只渲染面板内容容器, 不包含 Tab
     const container = document.createElement('div')
-    container.className = 'side-panel-manager'
-    // 渲染 Tab 切换栏
-    this.tabsContainer = this.renderTabs()
-    container.appendChild(this.tabsContainer)
-    // 渲染面板内容容器
+    container.className = 'side-panel-content-wrapper'
+    // 渲染面板内容区
     this.contentContainer = document.createElement('div')
     this.contentContainer.className = 'side-panel-content'
     container.appendChild(this.contentContainer)
+    // 在外部传入的 tabsContainer 中渲染 Tab
+    this.renderTabsToContainer()
+    
     return container
   }
 
-  // 渲染 Tab 切换栏
-  public renderTabs(): HTMLDivElement {
-    const tabs = document.createElement('div')
-    tabs.className = 'side-panel-tabs'
+  // 渲染 tab 到容器中
+  public renderTabsToContainer(): void {
+    // 先清空 Tab 容器
+    this.tabsContainer.innerHTML = ''
     // 为每个面板创建一个 tab
     this.configs.forEach(config => {
       const tab = document.createElement('div')
-      tab.className = 'side-panel-tab'
+      tab.className = 'side-panel-tab-vertical'
       tab.dataset.panelId = config.id
       // Tab 内容: 图标 + 标题
       if (config.icon) {
-        const icon = document.createElement('span')
+        const icon = document.createElement('div')
         icon.className = 'tab-icon'
-        icon.textContent = config.icon
+        icon.textContent = config.icon 
         tab.appendChild(icon)
       }
-      // 标题 
-      const title = document.createElement('span')
-      title.className = 'tab-title'
-      title.textContent = config.title 
+      // 标题 (垂直显示)
+      const title = document.createElement('div')
+      title.className = 'tab-title-vertical'
+      title.textContent = config.title
       tab.appendChild(title)
       // 点击 Tab 切换面板
-      tab.onclick = () => this.showPanel(config.id)
-      tabs.appendChild(tab)
+      tab.onclick = () => this.togglePanel(config.id)
+      // hover 效果
+      tab.onmouseenter = () => {
+        tab.style.background = '#e8e8e8'
+      }
+      tab.onmouseleave = () => {
+        if (this.activePanel !== config.id) {
+          tab.style.background = '#f5f5f5'
+        }
+      }
+      this.tabsContainer.appendChild(tab)
     })
-    return tabs 
   }
 
-  // 显示指定面板
-  public showPanel(id: string): void {
+  // 切换指定面板, 支持传参
+  public togglePanel(panelId: string, ...args: any[]): void {
     // 验证 store 是否存在
     if (!this.store) {
       console.error('[SidePanelManager] store 未初始化,无法显示面板')
       return 
     }
     // 未注册, 就是当前面板, 则不用处理
-    if (!this.registry.has(id)) {
-      console.warn(`[SidePanelManager] 面板 "${id}" 未注册`)
+    if (!this.registry.has(panelId)) {
+      console.warn(`[SidePanelManager] 面板 "${panelId}" 未注册`)
       return 
     }
-    if  (this.activePanel === id) return 
+    // 若点击的是当前面板, 则关闭, 视觉上会呈现 '收回去'
+    if  (this.activePanel === panelId) {
+      this.hideCurrentPanel()
+      return 
+    }
+
     // 1. 隐藏当前活跃面板
     if (this.activePanel) {
       const currentPanel = this.panels.get(this.activePanel)
       currentPanel?.onHide?.()
     }
     // 2. 获取或创建目标面板实例
-    let panel = this.panels.get(id)
+    let panel = this.panels.get(panelId)
     if (!panel) {
-      // 懒加载, 首次闲时候才创建实例
-      panel = this.registry.createPanel(id, this.store)
-      this.panels.set(id, panel)
-      console.log(`[SidePanelManager] 创建面板实例: ${id}`)
+      // 懒加载, 首次闲时候才创建实例, 传入额外参数到 createPanel
+      panel = this.registry.createPanel(panelId, this.store, ...args)
+      this.panels.set(panelId, panel)
     }
     // 3. 显示目标面板实例
     this.contentContainer.innerHTML = ''
     this.contentContainer.appendChild(panel.getContainer())
     panel.onShow?.()
     // 4. 更新激活状态
-    this.activePanel = id 
-    this.updateTabsActiveState(id)
-    console.log(`[SidePanelManager] 切换到面板: ${id}`)
+    this.activePanel = panelId
+    this.updateTabsActiveState(panelId)
+    // 通知 LayoutManager 展开面板
+    this.onPanelToggle?.(true)
   }
 
   // 更新 Tab 激活状态
   public updateTabsActiveState(activeId: string): void {
-    const tabs = this.tabsContainer.querySelectorAll<HTMLDivElement>('.side-panel-tab')
+    const tabs = this.tabsContainer.querySelectorAll<HTMLDivElement>('.side-panel-tab-vertical')
     tabs.forEach(tab => {
       const tabId = tab.dataset.panelId 
       if (tabId === activeId) {
@@ -131,6 +145,8 @@ export class SidePanelManager {
       this.contentContainer.innerHTML = ''
       this.activePanel = null 
       this.updateTabsActiveState('')
+      // 通知 LayoutManager 收起面板
+      this.onPanelToggle?.(false)
     }
   }
 

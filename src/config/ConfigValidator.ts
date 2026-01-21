@@ -14,11 +14,13 @@ export class ConfigValidator {
     }
     // 2. 右侧面板验证
     if (config.sidePanel?.enabled) {
-      if (!config.sidePanel.panels || config.sidePanel.panels.length === 0) {
-        throw new Error('[ConfigValidator] 启用右侧面板时, panels 不能为空')
-      }
+      // 取消严格验证,允许 panel 为空
+      // if (!config.sidePanel.panels || config.sidePanel.panels.length === 0) {
+      //   throw new Error('[ConfigValidator] 启用右侧面板时, panels 不能为空')
+      // }
+
       // 验证 defaultPanel 是否存在于 panels 中
-      if (config.sidePanel.defaultPanel) {
+      if (config.sidePanel.defaultPanel && config.sidePanel.panels && config.sidePanel.panels.length > 0) {
         const panelsIds = config.sidePanel.panels.map(p => p.id)
         if (!panelsIds.includes(config.sidePanel.defaultPanel)) {
           throw new Error(`[ConfigValidator] ${config.sidePanel.defaultPanel} 不存在 panels 中`)

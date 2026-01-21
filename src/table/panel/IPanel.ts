@@ -1,4 +1,5 @@
 import type { TableStore } from "@/table/state/createTableStore";
+import type { IColumn } from "@/types";
 
 /**
  * 面板接口: 所有右侧面板均要实现这个接口
@@ -20,5 +21,5 @@ export interface IPanelConfig {
   id: string // 面板的唯一ID, 如 'columns', 'filters', 'pivot' 等
   title: string // 面板标题, 如 '列管理', '筛选器', '透视表' 等
   icon?: string // 面板图标(可选), 如 '⚙️', '🔍', '📊' 等
-  component: new (store: TableStore) => IPanel // 面板构造函数: 输入的表格 store; 返回面板实例 IPanel
+  component: (store: TableStore, ...args: any[]) => IPanel // 工厂函数类型
 }

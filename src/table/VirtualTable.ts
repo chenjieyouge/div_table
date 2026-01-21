@@ -22,8 +22,8 @@ import type { ActionContext } from '@/table/handlers/ActionHandlers'
 import { LayoutManager } from '@/table/layout/LayoutManager'
 import { SidePanelManager } from '@/table/panel/SidePanelManager'
 import type { IPanelConfig } from '@/table/panel/IPanel'
-// 回调函数抽离
-import { ShellCallbacks } from '@/table/handlers/ShellCallbacks'
+import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' // 回调
+import { createColumnPanel } from '@/table/panel/panels/ColumnPanel'
 
 
 
@@ -189,10 +189,10 @@ export class VirtualTable {
       this.handleStateChange(next, prev, action)
     })
 
-    // 3. 应用列配置: 在 mount 前, 将 state 解析出来的列, 应用回 config
-    this.applyColumnsFromState()
-    // 4. 挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
+    // 3. 先挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
     this.mount()
+     // 4. 应用列配置: 在 mount 前, 将 state 解析出来的列, 应用回 config
+    this.applyColumnsFromState()
     // 5. 设置排序指示器
     this.shell.setSortIndicator(this.store.getState().data.sort)
     this.config.onModeChange?.(this.mode)
@@ -242,11 +242,7 @@ export class VirtualTable {
     containerEl.setAttribute('data-table-id', this.config.tableId)
     containerEl.classList.add('virtual-table-instance')
     // 5. 判断是否启用右侧面板, !! 强制转为 boolean
-    const hasSidePanel = !!(
-      this.config.sidePanel?.enabled &&
-      this.config.sidePanel?.panels &&
-      this.config.sidePanel.panels.length > 0 
-    )
+    const hasSidePanel = !!(this.config.sidePanel?.enabled)
     // 6. 创建回调函数集合, 并提取公共的 mountTableShell 参数
     const shellCallbacks = new ShellCallbacks(
       this.config,
@@ -255,7 +251,16 @@ export class VirtualTable {
       this.originalColumns,
       this.widthStorage,
       (key: string) => this.getClientFilterOptions(key),
-      (summaryRow: HTMLDivElement) => this.loadSummaryData(summaryRow)
+      (summaryRow: HTMLDivElement) => this.loadSummaryData(summaryRow),
+      (panelId: string) => {
+        if (this.sidePanelManager) {
+          if (panelId === 'columns') {
+            this.sidePanelManager.togglePanel(panelId, this.originalColumns)
+          } else {
+            this.sidePanelManager.togglePanel(panelId)
+          }
+        }
+      }
     )
 
     const commonShellParams = {
@@ -281,22 +286,59 @@ export class VirtualTable {
       })
       // 渲染布局容器
       const layoutContainer = this.layoutManager.render()
+      // 使用 widthStorage 恢复表格宽度
+      if (this.widthStorage) {
+        const savedWidth = this.widthStorage.loadTableWidth()
+        if (savedWidth && savedWidth >= 300) {
+          layoutContainer.style.width = `${savedWidth}px`
+        }
+      }
       containerEl.appendChild(layoutContainer)
-      // 创建右侧面板管理器, sp.panels 就一定存在
+      // 动态添加列管理面板到配置中
+      const panelConfigs: IPanelConfig[] = [
+        ...this.config.sidePanel!.panels, // 用户配置的面板
+        // 兜底: 列管理面板
+        {
+          id: 'columns',
+          title: '列管理',
+          icon: '⚙️',
+          // 使用 createColumnPanel 工厂函数
+          component: createColumnPanel as any 
+        }
+      ]
+      // 获取 Tab 容器
+      const tabsArea = this.layoutManager.getTabsArea()
+      // 创建面板管理器, 传入 Tab 容器和回调
       this.sidePanelManager = new SidePanelManager(
         this.store, // 此时 store 可能还没有有值哦!
-        sp.panels
+        panelConfigs,
+        tabsArea,
+        (show: boolean) => {
+          // 面板展开/收起时, 通知 LayoutManager 
+          this.layoutManager?.togglePanel(show)
+        }
       )
       // 将面板管理器挂载到右侧区域
       const sideArea = this.layoutManager.getSideArea()
       if (sideArea) {
         sideArea.appendChild(this.sidePanelManager.getContainer())
       }
+
+      // 显示默认面板, 如果是 columns 面板, 则传入 originalColumns 
+      const defaultPaneId = this.config.sidePanel?.defaultPanel || panelConfigs[0]?.id
+      if (defaultPaneId === 'columns') {
+        // 列管理面板需要传入 originalColumns
+        this.sidePanelManager.togglePanel(defaultPaneId, this.originalColumns)
+
+      } else {
+        this.sidePanelManager.togglePanel(defaultPaneId)
+      }
+
       // 关键: 挂载 table 到 mainArea, 并传入所有回调, 注意右侧面板先不要调用哦!
       const mainArea = this.layoutManager.getMainArea()!
       this.shell = mountTableShell({
         ...commonShellParams, // 展开所有公共参数
-        container: mainArea // 指定容器为主区域
+        container: mainArea, // 指定容器为主区域
       })
       console.log('[VirtualTable] 已启用右侧面板布局')
 
@@ -344,9 +386,9 @@ export class VirtualTable {
       const sp = this.config.sidePanel!
       // 直接调用, 不需要 setTimeout
       if (sp.defaultPanel) {
-        this.sidePanelManager?.showPanel(sp.defaultPanel)
+        this.sidePanelManager?.togglePanel(sp.defaultPanel)
       } else if (sp.panels.length > 0) {
-        this.sidePanelManager?.showPanel(sp.panels[0].id)
+        this.sidePanelManager?.togglePanel(sp.panels[0].id)
       }
     }
   }
@@ -611,7 +653,7 @@ export class VirtualTable {
 
   // 切换到指定的面板
   public showPanel(panelId: string): void {
-    this.sidePanelManager?.showPanel(panelId)
+    this.sidePanelManager?.togglePanel(panelId)
   }
 
   // 获取当前激活面板的 id 

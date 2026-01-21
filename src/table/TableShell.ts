@@ -55,6 +55,7 @@ export function mountTableShell(params: {
   onShowAllColumns?: () => void 
   onHideAllColumns?: () => void 
   onResetColumns?: () => void 
+  onToggleSidePanel?: (panelId: string) => void
 
 }): ITableShell {
 
@@ -80,6 +81,7 @@ export function mountTableShell(params: {
     onShowAllColumns,
     onHideAllColumns,
     onResetColumns,
+    onToggleSidePanel,
 
    } = params
 
@@ -125,9 +127,21 @@ export function mountTableShell(params: {
   </svg>
   `
   columnManagerBtn.title = '列管理'
+
+  // 创建表格宽度调整按钮
+//   const resizeBtn = document.createElement('button')
+//   resizeBtn.className = 'table-resize-btn'
+//   resizeBtn.innerHTML = `
+//   <svg width="16" height="16" viewBox="0 0 16 16">
+//     <path d="M10 2v12M6 2v12" stroke="currentColor" stroke-width="2"/>
+//   </svg>
+// `
+// resizeBtn.title = '拖拽调整表格宽度'
+// portalContainer.appendChild(resizeBtn)
+
+
   // 挂载到 portalContainer 就不会跟随滚动了, 就固定住啦!
   portalContainer.appendChild(columnManagerBtn)
-
   // 2. 表格包裹层 wrapper -> header
   const tableWrapper = createTableWrapper(config)
   const headerRow = renderer.createHeaderRow()
@@ -184,26 +198,40 @@ export function mountTableShell(params: {
   // 绑定整表宽度拖拽
   const tableResizeBinder = new TableResizeBinder()
   if (onTableResizeEnd) {
+    const layoutContainer = scrollContainer.closest<HTMLDivElement>('.table-layout-container')!
     tableResizeBinder.bind({
       scrollContainer,
       portalContainer, 
+      layoutContainer,
       onResizeEnd: onTableResizeEnd,
     })
   }
 
-  // 绑定列管理面板
+  // 绑定列管理面板, 判断是否启用了右侧面板
   const columnManagerBinder = new ColumnManagerBinder()
   if (getAllColumns && getHiddenKeys && onColumnToggle) {
-    columnManagerBinder.bind({
-      container: portalContainer,  // 传个相对定位不动的容器去参考位置
-      triggerBtn: columnManagerBtn,
-      getAllColumns,
-      getHiddenKeys,
-      onToggle: onColumnToggle,
-      onShowAll: onShowAllColumns || (() => {}),
-      onHideAll: onHideAllColumns || (() => {}),
-      onReset: onResetColumns || (() => {})
-    })
+    // 检查是否启用了右侧面板
+    const hasSidePanel = config.sidePanel?.enabled
+    if (hasSidePanel) {
+      // 若启用了右侧面板, 则点击按钮打开列管理面板
+      columnManagerBtn.addEventListener('click', (e: MouseEvent) => {
+        e.stopPropagation()
+        // 通过回调函数来打开右侧面板
+        onToggleSidePanel?.('columns')
+      })
+    } else {
+      // 未开启右侧面板, 则兼容原来的弹窗样式
+      columnManagerBinder.bind({
+        container: portalContainer,  // 传个相对定位不动的容器去参考位置
+        triggerBtn: columnManagerBtn,
+        getAllColumns,
+        getHiddenKeys,
+        onToggle: onColumnToggle,
+        onShowAll: onShowAllColumns || (() => {}),
+        onHideAll: onHideAllColumns || (() => {}),
+        onReset: onResetColumns || (() => {})
+      })
+    }
   }
 
   // toto: 更多列功能添加

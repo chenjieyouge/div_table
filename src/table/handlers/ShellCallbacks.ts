@@ -20,7 +20,8 @@ export class ShellCallbacks {
     private originalColumns: IColumn[],
     private widthStorage: ColumnWidthStorage | null,
     private getClientFilterOptions: (key: string) => string[],
-    private loadSummaryData: (summaryRow: HTMLDivElement) => Promise<void>
+    private loadSummaryData: (summaryRow: HTMLDivElement) => Promise<void>,
+    private onToggleSidePanel?: (panelId: string) => void
   ) {}
 
   // 获取所有回调函数
@@ -129,7 +130,8 @@ export class ShellCallbacks {
       onResetColumns: () => {
         // 重置, 显示所有列
         this.store.dispatch({ type: 'COLUMNS_RESET_VISIBILITY' })
-      }
+      },
+      onToggleSidePanel: this.onToggleSidePanel,
 
       // 后续更多回调拓展... virtual -> shell -> binder -> view 
     }

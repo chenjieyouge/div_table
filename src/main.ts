@@ -104,6 +104,15 @@ const configSmall: IUserConfig = {
       }
     },
   ],
+  // 配置右侧面板
+  sidePanel: {
+    enabled: true,
+    position: 'right',
+    width: 250,
+    defaultOpen: true,
+    defaultPanel: 'columns',
+    panels: []
+  },
   onModeChange(mode: 'client' | 'server') {
     // console.log('[小数据表格-内存模式]: ', mode)
   },
@@ -173,6 +182,15 @@ const configLarge: IUserConfig = {
 
   fetchSummaryData(): Promise<Record<string, any>> {
     return mockFechSummaryData()
+  },
+
+  sidePanel: {
+    enabled: true,
+    position: 'right',
+    width: 320,
+    defaultOpen: true,
+    defaultPanel: 'columns',
+    panels: []
   },
 
   // 回调: 在这里 "消费" 页面变化数据

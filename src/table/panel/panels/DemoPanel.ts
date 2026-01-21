@@ -9,7 +9,7 @@ import { TableStore } from "@/table/state/createTableStore";
  * 2. 面板可以访问 state
  * 3. 面板生命周期回调正常
  */
-export class DemoPanel implements IPanel {
+export class DemoPanelImpl implements IPanel {
   private container: HTMLDivElement 
   private unsubscribe: (() => void) | null = null 
 
@@ -91,4 +91,9 @@ export class DemoPanel implements IPanel {
     this.container.remove()
   }
 
+}
+
+// 导出工厂函数
+export const DemoPanel = (store: TableStore): IPanel => {
+  return new DemoPanelImpl(store)
 }
