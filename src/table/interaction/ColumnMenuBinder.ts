@@ -7,13 +7,23 @@ export class ColumnMenuBinder {
 
   public bind(params: {
     scrollContainer: HTMLDivElement,
+    portalContainer: HTMLDivElement,
     headerRow: HTMLDivElement,
     columns: IColumn[] // 完整的列配置
     getCurrentSort: () => { key: string, direction: 'asc' | 'desc' } | null,
-    onSort: (key: string, direction: 'asc' | 'desc' | null) => void 
+    onSort: (key: string, direction: 'asc' | 'desc' | null) => void,
+    onBeforeOpen?: () => void,
 
   }) {
-    const { scrollContainer, headerRow, columns, getCurrentSort, onSort } = params
+    const { 
+      scrollContainer, 
+      headerRow, 
+      columns, 
+      portalContainer, 
+      onBeforeOpen, 
+      getCurrentSort, 
+      onSort 
+    } = params
 
     // 表头行上事件委托, 监听 click 事件, 并找到最近的 "三点" 按钮
     headerRow.addEventListener('click', (e: MouseEvent) => {
@@ -31,6 +41,8 @@ export class ColumnMenuBinder {
         this.closeMenu()
         return 
       }
+      // 关闭其他弹框
+      onBeforeOpen?.()
       // 关闭旧菜单, 如果有其他列的菜单也打开就有点冲突了
       this.closeMenu()
 
@@ -55,8 +67,8 @@ export class ColumnMenuBinder {
           btn.classList.remove('active')
         }
       }
-      // 真正渲染菜单
-      this.menuView.render(menuConfig, btn, scrollContainer)
+      // 真正渲染菜单 
+      this.menuView.render(menuConfig, btn, portalContainer) 
       // 点击外部关闭菜单
       this.onClickOutSide = (e: MouseEvent) => {
         const target = e.target as HTMLElement
@@ -74,8 +86,9 @@ export class ColumnMenuBinder {
     })
   }
 
+
   // 关闭菜单
-  private closeMenu() {
+  public closeMenu() {
     this.menuView.destroy()
     document.querySelectorAll('.col-menu-btn.active').forEach(btn => {
       btn.classList.remove('active')
@@ -86,6 +99,7 @@ export class ColumnMenuBinder {
       this.onClickOutSide = null 
     }
   }
+
 
   // 解绑
   public unbind() {

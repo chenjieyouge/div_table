@@ -13,7 +13,7 @@ export interface IColumnMenuConfig {
 export class ColumnMenuView {
   private popupEl: HTMLDivElement | null = null 
   // 创建菜单面板 dom 
-  public render(config: IColumnMenuConfig, anchorEl: HTMLElement, container: HTMLElement): HTMLDivElement {
+  public render(config: IColumnMenuConfig, anchorEl: HTMLElement, portalContainer: HTMLElement): HTMLDivElement {
     // 创建前先清理一波
     this.destroy()
     const { column, currentSort, handleSort } = config
@@ -21,10 +21,12 @@ export class ColumnMenuView {
     // 创建弹窗容器
     this.popupEl = document.createElement('div')
     this.popupEl.className = 'col-menu-popup'
-    // 菜单弹窗使用 fixed 不受容器滚动影响
+    // 菜单弹窗, 相对于 portalContainer 定位
     const rect = anchorEl.getBoundingClientRect() // "三点"按钮的位置
-    this.popupEl.style.left = `${rect.left}px`
-    this.popupEl.style.top = `${rect.bottom + 6}px`
+    const portalRect = portalContainer.getBoundingClientRect()
+
+    this.popupEl.style.left = `${rect.left - portalRect.left}px`
+    this.popupEl.style.top = `${rect.bottom - portalRect.top + 6}px`
 
     const menuItems: Array<{
       icon: string
@@ -79,8 +81,8 @@ export class ColumnMenuView {
       // 挂载
       this.popupEl?.appendChild(menuItem)
     })
-    // 表格容器挂载上弹出
-    container.appendChild(this.popupEl)
+    // 挂载到 portalContainer 
+    portalContainer.appendChild(this.popupEl)
     return this.popupEl
   }
 
@@ -95,3 +97,4 @@ export class ColumnMenuView {
     return this.popupEl
   }
 }
+

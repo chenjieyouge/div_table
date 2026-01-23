@@ -4,11 +4,13 @@
 /* ======== 表格布局系统 ========= */
 /* 布局容器 */
 .table-layout-container {
+  position: relative;
   display: flex;
   width: 800px; /* 初始固定宽度 */
   max-width: 100%;
   height: 100%;
-  position: relative;
+  box-sizing: border-box;
+  border-bottom: 1px solid #eee;
 }
 
 /* 主表格区域 */
@@ -23,6 +25,7 @@
   position: relative;
   flex-shrink: 0;
   width: 250px;
+  height: 100%;
   background-color: #fff;
   border-left: 1px solid #e0e0e0;
   transition: width 0.3s, opacity 0.3s;
@@ -52,13 +55,6 @@
   z-index: 101;
 }
 
-/* .side-panel-wrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: #fafafa;
-  margin-left: 40px;
-} */
 
 /* Tab 按钮 */
 .side-panel-tab-vertical {
@@ -99,6 +95,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* 面板内容区*/
@@ -106,10 +104,8 @@
   flex: 1;
   overflow: auto;
   padding: 16px;
+  box-sizing: border-box;
 }
-
-
-
 
 
 /* 响应式布局 */
@@ -119,33 +115,12 @@
   border-top: 1px solid #e0e0e0;
 }
 
-/* 动画 */
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-@keyframes slideOutRight {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-}
-
 
 /* portal 容器, 用来承载浮动面板 */
 .table-portal-container {
   position: relative;
   overflow: hidden;
+  height: 100%;
 }
 
 .table-container {
@@ -154,10 +129,14 @@
   border: 1px solid #ddd;
   scrollbar-width: thin;
   scrollbar-color: #c1c1c1 #f1f1f1;
+  height: 100%;
 }
 
 .table-wrapper {
   position: relative;
+  border-bottom: 1px solid #ccc;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 
@@ -338,7 +317,7 @@
   max-height: 300px;
   min-width: 150px;
   overflow-y: auto;
-  z-index: 999;
+  z-index: 1001;
   border-radius: 10px;
 }
 
@@ -456,14 +435,14 @@
 
 /* 列菜单弹窗 */
 .col-menu-popup {
-  position: fixed; /* 固定定位让弹窗不受滚动影响 */
+  position: absolute;
   background-color: #fff;
   border: 1px solid #d9d9d9;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   min-width: 180px;
   padding: 4px 0;
-  z-index: 1001;
+  z-index: 1002;
 }
 
 /* 菜单项 */

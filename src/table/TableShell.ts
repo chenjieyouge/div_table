@@ -13,6 +13,27 @@ import { ColumnMenuBinder } from "@/table/interaction/ColumnMenuBinder";
 import { ColumnManagerBinder } from "@/table/interaction/ColumnManagerBinder";
 
 
+// 全局弹窗管理器, 弹窗之间互斥出现
+class PopupManager {
+  private static activePopups: Array<{ close: () => void }> = []
+  
+  static register(popup: { close: () => void }) {
+    this.activePopups.push(popup)
+  }
+
+  static closeAll() {
+    this.activePopups.forEach(popup => popup.close())
+  }
+
+  static unregister(popup: { close: () => void }) {
+    const index = this.activePopups.indexOf(popup)
+    if (index > -1) {
+      this.activePopups.splice(index, 1)
+    }
+  }
+}
+
+
 export interface ITableShell {
   scrollContainer: HTMLDivElement
   virtualContent: HTMLDivElement
@@ -176,10 +197,12 @@ export function mountTableShell(params: {
   if (onColumnFilterChange && getFilterOptions && getCurrentFilter) {
     filterBinder.bind({
       scrollContainer,
+      portalContainer,
       headerRow,
       onFilterChange: onColumnFilterChange,
       getFilterOptions,
       getCurrentFilter,
+      onBeforeOpen: () => PopupManager.closeAll() // 打开前先关闭所有弹窗
     })
   }
 
@@ -188,12 +211,18 @@ export function mountTableShell(params: {
   if (getCurrentSort && onMenuSort) {
     menuBinder.bind({
       scrollContainer,
+      portalContainer,
       headerRow,
       columns: config.columns,
       getCurrentSort,
-      onSort: onMenuSort
+      onSort: onMenuSort,
+      onBeforeOpen: () => PopupManager.closeAll() // 打开前先关闭所有弹窗
     })
   }
+
+  // 注册弹窗到管理器
+  PopupManager.register({ close: () => filterBinder.closePopup() })
+  PopupManager.register({ close: () => menuBinder.closeMenu() })
 
   // 绑定整表宽度拖拽
   const tableResizeBinder = new TableResizeBinder()
@@ -328,9 +357,9 @@ function getContainer(selector: string): HTMLDivElement {
 
 // 辅助函数-给大容器, 注入 css 变量
 function applyContainerStyles(container: HTMLDivElement, config: IConfig) {
-  container.style.setProperty('--header-height', `${config.headerHeight}px`)
   container.style.setProperty('--summary-height', `${config.summaryHeight}px`)
   container.style.setProperty('--row-height', `${config.rowHeight}px`)
+  container.style.setProperty('--table-height', `${config.tableHeight}px`) // 整表高度
   // 给每列都写入 css 变量, 为后续 cell 宽度响应式更新
   for (const col of config.columns) {
     container.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)

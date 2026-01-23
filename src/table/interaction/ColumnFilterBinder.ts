@@ -7,18 +7,22 @@ export class ColumnFilterBinder {
 
   public bind(params: {
     scrollContainer: HTMLDivElement,
+    portalContainer: HTMLDivElement,
     headerRow: HTMLDivElement,
     onFilterChange: (key: string, filter: ColumnFilterValue | null) => void 
     getFilterOptions: (key: string) => Promise<string[]>,
     getCurrentFilter: (key: string) => ColumnFilterValue | undefined,
+    onBeforeOpen?: () => void
   }) {
     // 解构出从 tableShell 传入进来的参数
     const {
       scrollContainer,
+      portalContainer,
       headerRow,
       onFilterChange,
       getFilterOptions,
       getCurrentFilter,
+      onBeforeOpen,
     } = params
 
     headerRow.addEventListener('click', async (e: MouseEvent) => {
@@ -32,6 +36,8 @@ export class ColumnFilterBinder {
       const filterType = btn.dataset.filterType as ColumnFilterType | undefined
 
       if (!key || !filterType) return 
+      // 打开前关闭其他弹框
+      onBeforeOpen?.()
       // 关闭旧弹层
       this.closePopup()
 
@@ -42,10 +48,12 @@ export class ColumnFilterBinder {
       this.popEl = document.createElement('div')
       this.popEl.className = 'col-filter-popup'
       const rect = btn.getBoundingClientRect()
-      const containerRect = scrollContainer.getBoundingClientRect()
+      const portalRect = portalContainer.getBoundingClientRect()
 
-      this.popEl.style.left = `${rect.left - containerRect.left + scrollContainer.scrollLeft}px`
-      this.popEl.style.top = `${rect.bottom - containerRect.top + scrollContainer.scrollTop}px`
+      // this.popEl.style.left = `${rect.left - portalRect.left + scrollContainer.scrollLeft}px`
+      // this.popEl.style.top = `${rect.bottom - portalRect.top + scrollContainer.scrollTop}px`
+      this.popEl.style.left = `${rect.left - portalRect.left}px`
+      this.popEl.style.top = `${rect.bottom - portalRect.top}px`
 
       // 根据不同类型渲染不同 UI, 类型有 set/text/dateRante/numberRange 等 
       if (filterType === 'set') {
@@ -54,15 +62,15 @@ export class ColumnFilterBinder {
       } else if (filterType === 'text') {
         await this.renderTextFilter(key, current, onFilterChange)
 
-      } else if (filterType === 'datarange') {
+      } else if (filterType === 'dateRange') {
         await this.renderDateRangeFilter(key, current, onFilterChange)
 
       } else if (filterType === 'numberRange') {
         await this.renderNumberRangeFilter(key, current, onFilterChange)
       }
 
-      // 弹层挂载到 scrollContainer 上 
-      scrollContainer.appendChild(this.popEl)
+      // 弹层挂载到 portalContainer上 
+      portalContainer.appendChild(this.popEl)
       // 点击弹层外部则关闭
       this.onClickOutside = (ce: MouseEvent) => {
         if (!this.popEl?.contains(ce.target as Node)) {

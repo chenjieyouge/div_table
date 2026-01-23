@@ -286,6 +286,7 @@ export class VirtualTable {
       })
       // 渲染布局容器
       const layoutContainer = this.layoutManager.render()
+      layoutContainer.style.height = `${this.config.tableHeight}px`
       // 使用 widthStorage 恢复表格宽度
       if (this.widthStorage) {
         const savedWidth = this.widthStorage.loadTableWidth()
