@@ -394,6 +394,15 @@ export class VirtualTable {
     }
   }
 
+  // todo: 更新表格底部状态栏数据, 装饰用而已啦
+  private updateStatusBar() {
+    const totaRowsEl = document.getElementById('table-total-rows')
+    if (totaRowsEl && this.store) {
+      const state = this.store.getState()
+      // todo: totaRowsEl.textContent = state.totalRows.toString()
+    }
+  }
+
   // server 模式下: 加载总结行数据 (传参)
   private async loadSummaryData(summaryRow: HTMLDivElement) {
     if (!this.config.fetchSummaryData) return 

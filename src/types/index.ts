@@ -119,6 +119,9 @@ export interface IConfig extends ITableCallbacks {
   maxCachedPages: number // 最大缓存页面数 (仅数据)
   // 可选功能-右侧管理面板
   sidePanel?: SidePanelConfig
+  // 底部栏状态
+  showStatusBar?: boolean  // 是否显示底部状态, 默认 true
+  statusBarHeight?: number // 状态栏高度, 默认 32px
   // 数据源配置(可选)
   initialData?: Record<string, any>[] // 全量数据
   fetchAllData?: () => Promise<Record<string, any>[]>

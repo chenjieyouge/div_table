@@ -25,7 +25,10 @@ export function createDefaultConfig(): Omit<IConfig, 'columns'> {
     // 默认分页
     pageSize: 200,
     bufferRows: 20,
-    maxCachedPages: 10
+    maxCachedPages: 10,
+    // 底部状态栏
+    showStatusBar: true,
+    statusBarHeight: 32,
 
     // sidePanel 不提供默认值, 保持 undefined
     // 回调函数不提供默认值, 保持 undefined

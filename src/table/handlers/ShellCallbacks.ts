@@ -69,6 +69,11 @@ export class ShellCallbacks {
         if (this.widthStorage) {
           this.widthStorage.saveTableWidth(newWidth)
         }
+        // 同步更新, 表格底部状态栏宽度
+        const statusBar = document.querySelector('.table-status-bar') as HTMLDivElement
+        if (statusBar) {
+          statusBar.style.width = `${newWidth - 40 }px` // 硬编码了, 40是右侧面板 tab
+        }
       },
       getCurrentSort: () => {
         // 列菜单回调

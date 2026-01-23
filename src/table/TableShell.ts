@@ -134,10 +134,32 @@ export function mountTableShell(params: {
   scrollContainer.style.width = '100%'
   scrollContainer.style.height = '100%'
   applyContainerStyles(scrollContainer, config)
-
   // 4. 挂载关系: userContainer -> portalContainer -> scrollContainer
   portalContainer.appendChild(scrollContainer)
   containerEl.appendChild(portalContainer)
+
+  // 创建底部状态栏 (可选)
+  let statusBar: HTMLDivElement | null = null 
+  if (config.showStatusBar !== false) {
+    statusBar = document.createElement('div')
+    statusBar.className = 'table-status-bar'
+    // client 模式: 显示总行数和已选
+    // server 模式: 显示总行数, 当前页面, 已选
+    statusBar.innerHTML = `
+      <div class="table-status-bar-item">
+        总行数: <strong id="table-total-rows">0</strong>
+      </div>
+      <div class="table-status-bar-item" id="table-page-indicator" style="display: none;">
+      当前页: 第 <strong id="table-current-page">1</strong> 页 (共 <strong id="table-total-pages">1</strong> 页)
+      </div>
+      <div class="table-status-bar-item">
+        已选: <strong id="table-selected-rows">0</strong>
+      </div>
+    `
+  }
+  if (statusBar) {
+    containerEl.appendChild(statusBar) // 注意是挂载到 containerEl 哦!
+  }
 
   // 创建表格列管理按钮, 横向3个点, toto: 小齿轮(右上角)
   const columnManagerBtn = document.createElement('button')
@@ -357,9 +379,9 @@ function getContainer(selector: string): HTMLDivElement {
 
 // 辅助函数-给大容器, 注入 css 变量
 function applyContainerStyles(container: HTMLDivElement, config: IConfig) {
+  container.style.setProperty('--header-height', `${config.headerHeight}px`)
   container.style.setProperty('--summary-height', `${config.summaryHeight}px`)
   container.style.setProperty('--row-height', `${config.rowHeight}px`)
-  container.style.setProperty('--table-height', `${config.tableHeight}px`) // 整表高度
   // 给每列都写入 css 变量, 为后续 cell 宽度响应式更新
   for (const col of config.columns) {
     container.style.setProperty(`--col-${col.key}-width`, `${col.width}px`)
