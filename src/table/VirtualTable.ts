@@ -16,14 +16,20 @@ import { assertUniqueColumnKeys, resolveColumns } from '@/table/model/ColumnMode
 import { ColumnWidthStorage } from '@/utils/ColumnWidthStorage'
 import { ColumnManager } from '@/table/core/ColumnManager'
 import { PerformanceMonitor } from '@/utils/PerformanceMonitor'
-import { actionHandlers, handleDataChange } from '@/table/handlers/ActionHandlers'
-import type { ActionContext } from '@/table/handlers/ActionHandlers'
 // 重构布局 + 右侧菜单栏
 import { LayoutManager } from '@/table/layout/LayoutManager'
 import { SidePanelManager } from '@/table/panel/SidePanelManager'
 import type { IPanelConfig } from '@/table/panel/IPanel'
 import { ShellCallbacks } from '@/table/handlers/ShellCallbacks' // 回调
 import { createColumnPanel } from '@/table/panel/panels/ColumnPanel'
+import { 
+  actionHandlers, 
+  COLUMN_EFFTECT_ACTIONS, 
+  DATA_EFFECT_ACTIONS, 
+  handleDataChange, 
+  STATE_ONLY_ACTIONS, 
+  STRUCTURAL_EFFECT_ACTIONS } from '@/table/handlers/ActionHandlers'
+import type { ActionContext } from '@/table/handlers/ActionHandlers'
 
 
 
@@ -537,18 +543,36 @@ export class VirtualTable {
     })
   }
 
-  // state 变化后的统一入口 (里程碑A的 "表格骨架核心"), 作为触发动作执行的最后一步
+  // state 变化后的统一入口, 使用策略模式, 路由到 ActionHandler 映射, 并检测走白名单
   private handleStateChange(next: TableState, prev: TableState, action: TableAction) {
-    // 使用策略模式, 路由到 ActionHandler 处理器
+    // 1. 先查找是否有注册的处理器
     const handler = actionHandlers.get(action.type)
 
     if (handler) {
       const context: ActionContext = { table: this }
       handler(action, context) // 动作名称, 响应视图逻辑
-    } else {
-      // 默认处理: 排序, 筛选等数据变化
-      handleDataChange(action, { table: this })
+      return  // 处理完就返回, 不再走后续逻辑
+    } 
+
+    // 2. 若没有注册处理器, 检查是否再白名单中, 在 dev 模式下给出警告
+    if (process.env.NODE_ENV === 'development') {
+      const allKnowActions = new Set([
+        ...DATA_EFFECT_ACTIONS,
+        ...COLUMN_EFFTECT_ACTIONS,
+        ...STRUCTURAL_EFFECT_ACTIONS,
+        ...STATE_ONLY_ACTIONS,
+      ])
+
+      if (!allKnowActions.has(action.type)) {
+        console.warn(`[VirtualTable] 未知的 action type: "${action.type}"`,
+          '\n请在 ActionHandlers.ts 中注册该 action 或添加到对应的白名单中!'
+        )
+      }
     }
+
+    // 3. 不再有默认的 handleDataChange 兜底
+    // 这样可以避免 "未知 action 误触发数据刷新" 的重大问题
+
   }
 
 
