@@ -43,6 +43,7 @@ export interface IPageInfo {
   startPage: number
   endPage: number
   totalPages: number
+  currentPage: number
 }
 
 // 列字段配置, 文档约定必传哦!

@@ -27,6 +27,8 @@ export function createTableStore(params: {
       clientFilterText: '',
       sort: null,
       columnFilters: {}, // 初始无筛选
+      totalRows: 0,  // 行数初始化
+      currentPage: 0, 
     },
     columns: {
       order: columns.map((c) => c.key),
@@ -210,6 +212,20 @@ export function createTableStore(params: {
             ...prev.columns,
             hiddenKeys: []
           }
+        }
+      }
+
+      case 'SET_TOTAL_ROWS': {
+        return {
+          ...prev,
+          data: { ...prev.data, totalRows: action.payload.totalRows }
+        }
+      }
+
+      case 'SET_CURRENT_PAGE': {
+        return {
+          ...prev,
+          data: { ...prev.data, currentPage: action.payload.page }
         }
       }
 

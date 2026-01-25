@@ -14,6 +14,7 @@ export function calculatePageRange(
   return {
     startPage: Math.min(startPage, totalPages),
     endPage: Math.min(endPage, totalPages),
+    currentPage: Math.min(startPage - 1, totalPages - 1), // 当前页码
     totalPages,
   }
 }

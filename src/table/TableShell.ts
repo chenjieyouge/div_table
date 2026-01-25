@@ -145,15 +145,17 @@ export function mountTableShell(params: {
     statusBar.className = 'table-status-bar'
     // client 模式: 显示总行数和已选
     // server 模式: 显示总行数, 当前页面, 已选
+    // 使用 tableId 生成唯一 ID, 避免多表格冲突
+    const tableId = config.tableId || 'default'
     statusBar.innerHTML = `
       <div class="table-status-bar-item">
-        总行数: <strong id="table-total-rows">0</strong>
+        总行数: <strong id="table-total-rows-${tableId}">0</strong>
       </div>
-      <div class="table-status-bar-item" id="table-page-indicator" style="display: none;">
-      当前页: 第 <strong id="table-current-page">1</strong> 页 (共 <strong id="table-total-pages">1</strong> 页)
+      <div class="table-status-bar-item" id="table-page-indicator-${tableId}" style="display: none;">
+      当前页: 第 <strong id="table-current-page-${tableId}">1</strong> 页 (共 <strong id="table-total-pages-${tableId}">1</strong> 页)
       </div>
       <div class="table-status-bar-item">
-        已选: <strong id="table-selected-rows">0</strong>
+        已选: <strong id="table-selected-rows-${tableId}">0</strong>
       </div>
     `
   }

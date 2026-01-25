@@ -1,7 +1,7 @@
 import { DataManager } from "@/data/DataManager";
 import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
-import { IConfig } from "@/types";
+import { IConfig, IPageInfo } from "@/types";
 import { calculatePageRange } from "@/utils/pageUtils";
 
 
@@ -13,6 +13,8 @@ export class VirtualViewport {
 
   private scrollContainer: HTMLDivElement
   private virtualContent: HTMLDivElement
+  private onPageChange?: (pageInfo: IPageInfo) => void
+
   private visibleRows = new Set<number>() // 当前可见行下标集合
   private rowElementMap = new Map<number, HTMLDivElement>() // 行下标 -> 行 DOM 映射
 
@@ -23,6 +25,7 @@ export class VirtualViewport {
     scroller: VirtualScroller;
     scrollContainer: HTMLDivElement 
     virtualContent: HTMLDivElement
+    onPageChange?: (pageInfo: IPageInfo) => void // 可选回调
   }) {
     // 初始化时, 值由 VirtaulTable 传递过来
     this.config = params.config;
@@ -31,6 +34,7 @@ export class VirtualViewport {
     this.scroller = params.scroller;
     this.scrollContainer = params.scrollContainer
     this.virtualContent = params.virtualContent
+    this.onPageChange = params.onPageChange
   }
 
   // 允许在外部 totalRows 变化后, 替换 scroller , 针对数据筛选场景
@@ -75,7 +79,7 @@ export class VirtualViewport {
       endRow, 
       this.config.totalRows, 
       this.config.pageSize)
-    this.config.onPageChange?.(pageInfo)
+    this.onPageChange?.(pageInfo)  // 用实例方法, 而非 config
 
     // 设置虚拟内容区的位置和高度
     this.virtualContent.style.transform = `translateY(${translateY}px)`
@@ -95,15 +99,17 @@ export class VirtualViewport {
         this.rowElementMap.set(rowIndex, rowEl)
         //异步填充数据, 失败只 warn, 不中断渲染
         this.updateRowData(rowIndex).catch(console.warn)
+
       } else {
         // 当前行已在可视区里面, 则无需重复创建 dom, 只更新 top 即可
         const rowEl = this.rowElementMap.get(rowIndex)!
         rowEl.style.top = `${(rowIndex - startRow) * this.config.rowHeight}px`
       }
-      // 批量插入新行
-      if (fragment.children.length > 0) {
-        this.virtualContent.appendChild(fragment)
-      }
+      
+    }
+    // 批量插入新行, 一定要移到 for 循环的外部!!!
+    if (fragment.children.length > 0) {
+      this.virtualContent.appendChild(fragment)
     }
 
     // 清理掉离开视口的旧行 dom 

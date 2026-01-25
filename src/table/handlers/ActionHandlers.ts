@@ -27,6 +27,8 @@ export const actionHandlers = new Map<string, ActionHandler>([
   ['COLUMNS_RESET_VISIBILITY', handleColumnVisibility],
   // 冻结列
   ['FROZEN_COUNT_SET', handleFrozenCountSet],
+  ['SET_TOTAL_ROWS', handleNoOp],
+  ['SET_CURRENT_PAGE', handleNoOp]
 ])
 
 // 列宽处理器
@@ -94,5 +96,10 @@ export function handleDataChange(action: TableAction, ctx: ActionContext): void 
     void ctx.table['applyServerQuery'](state.data.query)
     void ctx.table['refreshSummary']()
    }
+}
+
+// 空处理器, 用于更新 state, 不触发副作用的 action 
+export function handleNoOp(action: TableAction, ctx: ActionContext): void {
+  // 什么都不做, 只是为了防止走到 默认的 handleDataChange
 }
 

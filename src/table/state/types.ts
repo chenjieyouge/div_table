@@ -11,6 +11,8 @@ export interface TableState {
     clientFilterText: string // client下, 全局关键字搜索
     sort: SortValue  // 排序三态:  desc->asc-null
     columnFilters: Record<string, ColumnFilterValue> // 列值筛选 (升级为联合类型)
+    totalRows: number // 总行数
+    currentPage: number // server 模式下的当前页码
   }
   // 列域状态: 当前只做顺序, 冻结前 N 列, 宽度覆写, 不做隐藏列
   columns: {
@@ -39,3 +41,5 @@ export type TableAction =
   | { type: 'COLUMN_BATCH_HIDE'; payload: { keys: string[] } }  // 批量隐藏
   | { type: 'COLUMN_BATCH_SHOW'; payload: { keys: string[] } }  // 批量显示
   | { type: 'COLUMNS_RESET_VISIBILITY'; payload?: {} }
+  | { type: 'SET_TOTAL_ROWS'; payload: { totalRows: number } }  // 设置总行数
+  | { type: 'SET_CURRENT_PAGE'; payload: { page: number } } // server 模式下设置当前页码

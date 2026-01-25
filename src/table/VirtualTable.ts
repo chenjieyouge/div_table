@@ -50,6 +50,7 @@ export class VirtualTable {
   // 布局管理器 + 右侧面板管理器
   private layoutManager: LayoutManager | null = null 
   private sidePanelManager: SidePanelManager | null = null 
+  private scrollStopTimer?: number // 滚动停止检测定时器
 
   // ready 用于外部等待初始化完后 (store/shell/viewport 都 ok 后, 再 dispatch)
   public readonly ready: Promise<void> 
@@ -154,16 +155,23 @@ export class VirtualTable {
         // 8. 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
         void this.dataManager.getPageData(0).then(() => {
           const realTotal = this.dataManager.getServerTotalRows()
-          if (typeof realTotal === 'number' && realTotal >= 0 && realTotal !== this.config.totalRows) {
-            // totalRows 更新必须重建 scroller, 否则高度不对
+          if (typeof realTotal === 'number' && realTotal >= 0) {
+            // 先判断是否需要重建 scroller, 在 修改 config 之前
+            const needRebuild = realTotal !== this.config.totalRows
+            // 更新 totalRows
             this.config.totalRows = realTotal
-            this.scroller = new VirtualScroller(this.config)
-            this.viewport.setScroller(this.scroller)
-            this.shell.setScrollHeight(this.scroller)
-            // 刷新可视区, 骨架屏会重新计算范围, 然后从 cache 拿到 page0 填充
+            this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: realTotal} })
+            
+            // 只有 totalRows 变化时才重建 scroller
+            if (needRebuild) {
+              this.scroller = new VirtualScroller(this.config)
+              this.viewport.setScroller(this.scroller)
+              this.shell.setScrollHeight(this.scroller)
+            }
             this.viewport.refresh()
+            this.updateStatusBar() // 更新底部状态栏
           }
-        }).catch(console.warn)
+        }).catch(console.warn) 
         return 
       }
 
@@ -173,15 +181,15 @@ export class VirtualTable {
     const { mode, totalRows } = await bootstrapTable(this.config,this.dataManager)
     this.mode = mode 
     this.config.totalRows = totalRows
-    assertUniqueColumnKeys(this.config.columns) // 列 key 唯一值校验, 避免排序拖拽等混乱
-    this.originalColumns = [...this.config.columns] // 保留用户原始列配置
 
-    // 1. 创建 store (里程碑A: 先非受控模式)
+    // 1. 创建 全局 store 
     this.store = createTableStore({
       columns: this.originalColumns,
       mode: this.mode,
       frozenCount: this.config.frozenColumns
     })
+    // 更新 totalRows 到 store 中去 
+    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows } })
 
     // 2. 订阅 state 变化 -> 驱动副作用 (排序/筛选/列变化重建等)
     this.unsubscribleStore?.()
@@ -189,9 +197,12 @@ export class VirtualTable {
       this.handleStateChange(next, prev, action)
     })
 
-    // 3. 先挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
+    assertUniqueColumnKeys(this.config.columns) // 列 key 唯一值校验, 避免排序拖拽等混乱
+    this.originalColumns = [...this.config.columns] // 保留用户原始列配置
+
+    // 3. 挂载 DOM, 会绑定表头点击事件, 滚动事件等, 右侧边栏等
     this.mount()
-     // 4. 应用列配置: 在 mount 前, 将 state 解析出来的列, 应用回 config
+    // 4. 应用列配置: 在 mount 前, 将 state 解析出来的列, 应用回 config
     this.applyColumnsFromState()
     // 5. 设置排序指示器
     this.shell.setSortIndicator(this.store.getState().data.sort)
@@ -361,7 +372,20 @@ export class VirtualTable {
       renderer: this.renderer,
       scroller: this.scroller,
       scrollContainer: this.shell.scrollContainer,
-      virtualContent: this.shell.virtualContent
+      virtualContent: this.shell.virtualContent,
+      // 只在滚动停止时触发更新, 不然表格行数据一直更新闪烁
+      onPageChange: (pageInfo) => {
+        if (this.mode === 'server' && this.store) {
+          // 只更新 store, 不更新 DOM 
+          const currentPage = this.store.getState().data.currentPage 
+          if (currentPage !== pageInfo.currentPage) {
+              this.store.dispatch({
+              type: 'SET_CURRENT_PAGE',
+              payload: { page: pageInfo.currentPage }
+            })
+          }
+        }
+      }
     })
 
     // 初始化 ColumnManager 统一列管理
@@ -374,8 +398,20 @@ export class VirtualTable {
     // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
     this.shell.bindScroll(() => {
       this.viewport.updateVisibleRows()
+
+      // 只在 server 模式且由状态栏时, 检测滚动停止并更新
+      if (this.mode === 'server' && this.config.showStatusBar !== false) {
+        if (this.scrollStopTimer) {
+          clearTimeout(this.scrollStopTimer)
+        }
+        // 设置新定时器, 150ms, 无滚动则认为停止
+        this.scrollStopTimer = window.setTimeout(() => {
+          this.updateStatusBar()
+        }, 150)
+      }
     })
-    // 首次渲染数据
+    
+    // 首次渲染数据, cLient, 直接渲染整个数据
     this.viewport.updateVisibleRows()
     // 首次挂载后, 立即刷新一次总结行数据
     if (this.config.showSummary) {
@@ -394,12 +430,33 @@ export class VirtualTable {
     }
   }
 
-  // todo: 更新表格底部状态栏数据, 装饰用而已啦
+  // 更新表格底部状态栏数据
   private updateStatusBar() {
-    const totaRowsEl = document.getElementById('table-total-rows')
-    if (totaRowsEl && this.store) {
+    if (!this.store) {
+      console.warn('[updateStatusBar] store 未初始化')
+      return 
+    }
+    const tableId = this.config.tableId || 'default'
+    const totalRowsEl = document.getElementById(`table-total-rows-${tableId}`)
+    const pageIndicator = document.getElementById(`table-page-indicator-${tableId}`)
+    const currentPageEl = document.getElementById(`table-current-page-${tableId}`)
+    const totalPagesEl = document.getElementById(`table-total-pages-${tableId}`)
+
+    if (totalRowsEl) {
       const state = this.store.getState()
-      // todo: totaRowsEl.textContent = state.totalRows.toString()
+      // 显示总行数
+      totalRowsEl.textContent = state.data.totalRows.toString()
+      // 只在 server 模式, 才显示页码指示器
+      if (this.mode === 'server' && pageIndicator && currentPageEl && totalPagesEl) {
+        pageIndicator.style.display = 'flex'
+        // 页码计算: 总页数, 当前页
+        const totalPages = Math.ceil(state.data.totalRows / this.config.pageSize)
+        currentPageEl.textContent = (state.data.currentPage + 1).toString()
+        totalPagesEl.textContent = totalPages.toString()
+
+      } else if (pageIndicator) {
+        pageIndicator.style.display = 'none'
+      }
     }
   }
 
@@ -511,8 +568,11 @@ export class VirtualTable {
 
     // 监控 totalRow 变化时, 需要重建 scroller 
     this.config.totalRows = this.dataManager.getFullDataLength()
+    // 更新 store 中的 totalRows 
+    this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows: this.config.totalRows } })
     this.scroller = new VirtualScroller(this.config)
     this.viewport.setScroller(this.scroller)
+    this.updateStatusBar() // 更新底部状态栏
     // 同步滚动高度 + 刷新可视区
     this.shell.setScrollHeight(this.scroller)
     this.viewport.refresh()
@@ -576,6 +636,7 @@ export class VirtualTable {
     const totalRows = this.dataManager.getServerTotalRows()
     if (typeof totalRows === 'number') {
       this.config.totalRows = totalRows
+      this.store.dispatch({ type: 'SET_TOTAL_ROWS', payload: { totalRows } })
     }
     // totalRows 变化后必须重建 scroller, 否则滚动高度不准
     this.scroller = new VirtualScroller(this.config)
@@ -584,6 +645,7 @@ export class VirtualTable {
     this.shell.setScrollHeight(this.scroller)
     // 最后再刷新可视区
     this.viewport.refresh()
+    this.updateStatusBar() // 底部状态栏也要更新
   }
 
   // 从 localStorage 恢复列宽, 表格宽, 列顺序
@@ -685,6 +747,11 @@ export class VirtualTable {
     // 重置标记, 先用 any 大法顶上, 后续出问题再说
     this.shell = null as any 
     this.viewport = null as any 
+
+    // 清理滚动停止定时器
+    if (this.scrollStopTimer) {
+      clearTimeout(this.scrollStopTimer)
+    }
     // 重新挂载
     this.mount(containerSelector)
   }
@@ -701,6 +768,10 @@ export class VirtualTable {
     // 清理面板管理器
     this.sidePanelManager?.destroy()
     this.sidePanelManager = null 
+    // 清空定时器
+    if (this.scrollStopTimer) {
+      clearTimeout(this.scrollStopTimer)
+    }
   }
 
 
