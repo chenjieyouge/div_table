@@ -30,6 +30,8 @@ import {
   STATE_ONLY_ACTIONS, 
   STRUCTURAL_EFFECT_ACTIONS } from '@/table/handlers/ActionHandlers'
 import type { ActionContext } from '@/table/handlers/ActionHandlers'
+import { SortState } from '@/table/core/SortState'
+import { RenderMethod, RenderProtocalValidator, RenderScenario } from '@/table/viewport/RenderProtocol'
 
 
 
@@ -174,7 +176,15 @@ export class VirtualTable {
               this.viewport.setScroller(this.scroller)
               this.shell.setScrollHeight(this.scroller)
             }
-            this.viewport.refresh()
+            // ===== 规则3: 初始化填充不能走 applyServerQuery =======
+            if (process.env.NODE_ENV === 'development') {
+              RenderProtocalValidator.validate(
+                RenderScenario.INITIAL_FILL,
+                RenderMethod.UPDATE_VISIBLE,
+                'VirtaulTable.initializeAsync (server mode)'
+              )
+            }
+            this.viewport.updateVisibleRows() // 不能是 refresh() 哦!
             this.updateStatusBar() // 更新底部状态栏
           }
         }).catch(console.warn) 
@@ -403,6 +413,15 @@ export class VirtualTable {
 
     // 滚动监听由 shell 统一绑定, 而 VirtualTable 只提供滚动后做什么
     this.shell.bindScroll(() => {
+      // ====== 规则2: 数据滚动只能调用 updateVisibleRows() ===== 
+      if (process.env.NODE_ENV === 'development') {
+        RenderProtocalValidator.validate(
+          RenderScenario.SCROLL_UPDATE,
+          RenderMethod.UPDATE_VISIBLE,
+          'VirtaulTable scroll callback'
+        )
+      }
+
       this.viewport.updateVisibleRows()
 
       // 只在 server 模式且由状态栏时, 检测滚动停止并更新
@@ -417,8 +436,12 @@ export class VirtualTable {
       }
     })
     
-    // 首次渲染数据, cLient, 直接渲染整个数据
-    this.viewport.updateVisibleRows()
+    // 只在 client 模式下首次渲染, 因为已缓存了;
+    // 而 server 会等 getPageData(0) 后在 initializeAsync 的 then 回调中
+    if (this.mode === 'client') {
+      this.viewport.updateVisibleRows()
+    }
+   
     // 首次挂载后, 立即刷新一次总结行数据
     if (this.config.showSummary) {
       this.refreshSummary().catch(console.warn)
@@ -532,7 +555,7 @@ export class VirtualTable {
     // 性能监控
     PerformanceMonitor.measure('列更新', () => {
       this.applyColumnsFromState()
-      // 用 ColumnManager 统一更新, 并使用 shell 的缓存 DOM 引用, 减少重复查询
+      // 用 ColumnManager 统一更新, 并使用 shell 的缓存 DOM 引用, 减少重复查询, 也没有 refresh!
       this.columnManager.updateColumns(this.config.columns, {
         headerRow: this.shell.headerRow, 
         summaryRow: this.shell.summaryRow,
@@ -599,6 +622,16 @@ export class VirtualTable {
     this.updateStatusBar() // 更新底部状态栏
     // 同步滚动高度 + 刷新可视区
     this.shell.setScrollHeight(this.scroller)
+
+    // ======== 规则1: query 变化是结构性变化, 可以调用 refresh() ========
+    if (process.env.NODE_ENV === 'development') {
+      RenderProtocalValidator.validate(
+        RenderScenario.QUERY_CHANGE,
+        RenderMethod.REFRESH,
+        'VirtaulTable.applyClientState'
+      )
+    }
+
     this.viewport.refresh()
     await this.refreshSummary() // 总结行也可能刷新
   }
@@ -641,9 +674,15 @@ export class VirtualTable {
     }
   }
 
-  // server 模式下的筛选 
-  // 更新 query -> 清缓存 -> 拉取第一页 -> 更新 totalRows \
-  // -> 重建 VirtualScroller -> 通知 viewport.setScroller 和 refresh table
+  // ========== 规则3: applyServerQuery 只能在 query 真变化时调用 ======
+  /**
+   * 应用服务端查询
+   * - 只能在 query 真变化时调用 (排序/筛选等)
+   * - 禁止 被 SET_TOTAL_ROWS 这种 action 间接触发
+   * - 会清空缓存, 并重新加载第一页数据
+   * 
+   * @param query 查询条件
+   */
   private async applyServerQuery(next: ITableQuery) {
     this.serverQuery = {
       sortKey: next.sortKey,
@@ -667,7 +706,16 @@ export class VirtualTable {
     this.viewport.setScroller(this.scroller)
     // 一定要记得重设滚动容器的高
     this.shell.setScrollHeight(this.scroller)
-    // 最后再刷新可视区
+
+    // ====== 整个数据变化了, 调用 refresh() 是合法的 ======= 
+    if (process.env.NODE_ENV === 'development') {
+      RenderProtocalValidator.validate(
+        RenderScenario.QUERY_CHANGE,
+        RenderMethod.REFRESH,
+        'VirtualTable.applyServerQuery'
+      )
+    }
+
     this.viewport.refresh()
     this.updateStatusBar() // 底部状态栏也要更新
   }

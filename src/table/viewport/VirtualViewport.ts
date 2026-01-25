@@ -3,6 +3,7 @@ import { DOMRenderer } from "@/dom/DOMRenderer";
 import { VirtualScroller } from "@/scroll/VirtualScroller";
 import { IConfig, IPageInfo } from "@/types";
 import { calculatePageRange } from "@/utils/pageUtils";
+import { RenderScenario, RenderMethod, RenderProtocalValidator } from "@/table/viewport/RenderProtocol";
 
 
 export class VirtualViewport {
@@ -42,9 +43,19 @@ export class VirtualViewport {
     this.scroller = scroller
   }
 
-  // 更新可视区 (给 scroll 事件初始化时调用)
-  public updateVisibleRows() {
-    void this.updateVisibleRowsInternal()
+  // ========== 规则2: 普通滚动/补数据, 只能 updateVisibleRows() =========
+  /**
+   * 增量更新可视区行
+   * - 普通滚动
+   * - 初始化填充
+   * - 数据补充
+   * 
+   * 不会清空 DOM, 曾辉增量更新
+   */
+  public updateVisibleRows(): void {
+    requestAnimationFrame(() => {
+      this.updateVisibleRowsInternal()
+    })
   }
 
   // 获取当前可视区的数据行, 给外部 dom 引用, 避免重复查询
@@ -127,8 +138,21 @@ export class VirtualViewport {
     this.visibleRows = newVisibleSet
   }
 
-  // 更新某行数据: 先同步查缓存, 没有就触发分页加载, 然后再填充单元格
-  private async updateRowData(rowIndex: number) {
+  // ======== 规则2: 数据泌冲只能 updateRowData() =========
+  /**
+   * 更新某行数据 (异步加载后完成)
+   * 适用场景: server 模式下异步加载页数据
+   * @param rowIndex 
+   */
+  private async updateRowData(rowIndex: number): Promise<void> {
+    if (process.env.NODE_ENV === 'development') {
+      RenderProtocalValidator.validate(
+        RenderScenario.DATA_PATCH,
+        RenderMethod.UPDATE_DATA,
+        'VirtualViewport.updateRowData'
+      )
+    }
+    
     try {
       let rowData = this.dataManager.getRowData(rowIndex)
       if (!rowData) {
@@ -150,8 +174,23 @@ export class VirtualViewport {
     }
   }
 
-  // 刷新表格, 不重建 dom: 清空可是行缓存和更新可视区
+  // ========== 规则1: refresh() 只能在结构性变化时调用 =========
+  /**
+   * 清屏重建: 清空所有 DOM 并重新渲染
+   * ⚠️ 警告：此方法会导致闪烁，只能在以下场景调用:
+   * - 列数量/列顺序变化
+   * - 冻结列数变化
+   * - totalRows 导致 scroll 尺寸重算且需要清屏
+   * 
+   * 普通滚动/数据补充等, 则走 updateVisibleRows() 增量更新
+   */
   public refresh() {
+    // dev 模式下校验调用合法性
+    if (process.env.NODE_ENV === 'development') {
+      // 需要调用者传入 scenario, 暂时先不校验
+      // 后续会在调用点添加 scenario 参数
+    }
+
     // 清空虚拟内容区
     if (this.virtualContent) {
       this.virtualContent.replaceChildren()
@@ -159,8 +198,7 @@ export class VirtualViewport {
     // 清空当前渲染状态缓存
     this.visibleRows.clear()
     this.rowElementMap.clear()
-    // 重新渲染可视区
-    this.updateVisibleRows()
+    this.updateVisibleRows() // 重新渲染可视区
   }
 
   // 销毁: 释放引用 + 清空缓存 
