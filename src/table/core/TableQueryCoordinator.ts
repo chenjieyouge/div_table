@@ -76,35 +76,27 @@ export class TableQueryCoordinator {
     this.viewport.refresh()
     this.updateStatusBar()
     // 6. 刷新总结行
-    await this.refreshSummary()
+    this.refreshSummary()
   }
 
-  /** 刷新总结行 */
-  public async refreshSummary(): Promise<void> {
+  /** 同步刷新总结行 */
+  public refreshSummary(): void {
     // 检查总结行是否存在先
     if (!this.config.showSummary) return 
     const row = this.shell?.summaryRow
     if (!row) return 
 
-    const state = this.store.getState()
-    const query: ITableQuery = {
-      sortKey: state.data.sort?.key,
-      sortDirection: state.data.sort?.direction,
-      filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
-      columnFilters: state.data.columnFilters
-    }
-
-    const summaryData = await this.dataStrategy.getSummary(query)
+    // 同步获取总结行数据
+    const summaryData = this.dataStrategy.getSummary()
     if (summaryData) {
       this.renderer.updateSummaryRow(row, summaryData)
-    }
+    } 
   }
 
   /** 更新状态栏 (使用 DOM id 查找) */
   public updateStatusBar(): void {
 
     if (!this.store) {
-      console.warn('[updateStatusBar] store 未初始化')
       return 
     }
 

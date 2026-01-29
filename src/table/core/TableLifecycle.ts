@@ -105,6 +105,7 @@ export class TableLifecycle {
   public rebuild(callbacks: {
     applyColumnsFromState: () => void 
     applyQuery: (query: ITableQuery) => Promise<void>
+    updateVisibleRows: () => void
     getMountParams: () => { commonShellParams: any; containerEl: HTMLDivElement; mode: 'client' | 'server'  }
 
   }): void {
@@ -123,13 +124,21 @@ export class TableLifecycle {
     const state = this.store.getState()
     this.shell.setSortIndicator(state.data.sort)
 
-    const query: ITableQuery = {
-      sortKey: state.data.sort?.key,
-      sortDirection: state.data.sort?.direction,
-      filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
-      columnFilters: state.data.columnFilters
+    // 关键!: 只在 client 模式下调用 applyQuery, server 模式下 只需要 updateVisibleRows
+    if (state.data.mode === 'client') {
+      const query: ITableQuery = {
+        sortKey: state.data.sort?.key,
+        sortDirection: state.data.sort?.direction,
+        filterText: state.data.mode === 'client' ? state.data.clientFilterText : state.data.query.filterText,
+        columnFilters: state.data.columnFilters
     }
-    void callbacks.applyQuery(query)
+      void callbacks.applyQuery(query)
+
+    } else {
+      // server 模式下, 只需更新可视区, 不需要重新加载数据
+      callbacks.updateVisibleRows()
+    }
+   
   }
 
   /**

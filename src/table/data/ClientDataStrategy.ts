@@ -52,35 +52,62 @@ export class ClientDataStrategy implements DataStrategy {
     })
   }
 
-  public async getSummary(query: ITableQuery): Promise<Record<string, any> | null> {
-    // 计算 filterData 的总结行
+  /**
+   * 获取总结行数据 (同步)
+   * Client 模式下实时计算总结行
+   */
+  public getSummary(): Record<string, any> | null {
+    if (!this.columns || this.columns.length === 0) {
+      return null 
+    }
+   
     const summary: Record<string, any> = {}
+    let hasSummary = false 
 
     for (const col of this.columns) {
-      if (col.summaryType) {
-        // 获取一列的值数组
-        const values = this.filteredData.map(row => row[col.key])
-        // 根据配置的汇总类型 (sum/avg/count/max/min) 进行汇总
-        if (col.summaryType === 'sum') {
-          summary[col.key] = values.reduce((acc, val) => {
-            const num = parseFloat(val)
-            return acc + (isNaN(num) ? 0 : num)
-          }, 0)
-
-        } else if (col.summaryType === 'avg') {
-          const sum = values.reduce((acc, val) => {
-            const num = parseFloat(val)
-            return acc + (isNaN(num) ? 0 : num)
-          }, 0)
-          summary[col.key] = values.length > 0 ? sum / values.length : 0
-
-        } else if (col.summaryType === 'count') {
-          summary[col.key] = values.length
-
-        } // else if ... 其他聚合计算
+      if (col.summaryType && col.summaryType !== 'none') {
+        // 单列的汇总值
+        const value = this.calculateColumnSummary(col, this.filteredData)
+        summary[col.key] = value 
+        hasSummary = true 
       }
     }
-    return Object.keys(summary).length > 0 ? summary : null 
+
+    return hasSummary ? summary : null 
+  }
+
+  /**  
+   * 计算单列的汇总值
+   */
+  private calculateColumnSummary(col: IColumn, data: Record<string, any>[]): any {
+    if (!col.summaryType || col.summaryType === 'none' || data.length === 0) {
+      return null 
+    }
+    // 获取一列的值的数组, 将 null 排除了, map + filter 复杂度O(n) 但准确稳定
+    const values = data.map(row => row[col.key]).filter(v => v != null)
+
+    switch(col.summaryType) {
+      case 'sum': {
+        const numValues = values.map(v => Number(v)).filter(v => isNaN(v))
+        return numValues.reduce((acc, val) => acc + val, 0)
+      }
+
+      case 'avg': {
+        const numValues = values.map(v => Number(v)).filter(v => !isNaN(v))
+        if (numValues.length === 0) return 0
+        const sum = numValues.reduce((acc, val) => acc + val, 0)
+        return sum / numValues.length
+      }
+
+      case 'count': {
+        return values.length
+      }
+
+      // case ... 更多单列计算值
+
+      default: 
+        return null 
+    }
   }
 
   public getTotalRows(): number {

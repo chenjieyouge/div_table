@@ -16,21 +16,18 @@ export class ServerDataStrategy implements DataStrategy {
   private currentQuery: ITableQuery = {}
   private totalRows: number = 0
   private pageSize: number 
+  private summaryCache: Record<string, any> | null = null // 缓存总结行数据
 
   private fetchPageData: (pageIndex: number, query: ITableQuery) => Promise<IPageResponse>
-
-  private fetchSummaryData?: (query: ITableQuery) => Promise<Record<string, any>>
 
   // 初始化, 用户需要传入的参数: fetchData, pageSize, fetchSummaryData 可选 
   constructor(
     fetchPageData: (pageIndex: number, query: ITableQuery) => Promise<IPageResponse>,
     pageSize: number,
-    fetchSummaryData?: (query: ITableQuery) => Promise<Record<string, any>>
   ) {
     // 将用户传入的属性, 绑定给实例对象上
     this.fetchPageData = fetchPageData
     this.pageSize = pageSize
-    this.fetchSummaryData = fetchSummaryData
   }
 
   public async bootstrap(): Promise<{ totalRows: number; }> {
@@ -80,9 +77,12 @@ export class ServerDataStrategy implements DataStrategy {
     // 1. 清空缓存
     this.pageCache.clear()
     this.loadingPromises.clear()
+    this.summaryCache = null // 清空总结行缓存
+
     // 2. 更新 currentQuery
     this.currentQuery = query
-    // 3. 加载第 0 页
+    
+    // 3. 加载第 1 页 (会自动缓存 summary)
     await this.ensurePageForRow(0)
     
     return Promise.resolve({
@@ -91,19 +91,12 @@ export class ServerDataStrategy implements DataStrategy {
     })
   }
 
-  public async getSummary(query: ITableQuery): Promise<Record<string, any> | null> {
-    if (!this.fetchSummaryData) {
-      return null 
-    }
-
-    try {
-      const summaryData = await this.fetchSummaryData(query || this.currentQuery)
-      return summaryData
-
-    } catch (err) {
-      console.error('[ServerDataStrategy] 加载中结婚失败: ', err)
-      return null 
-    }
+  /** 同步获取-总结行数据
+   * Server 模式下, 直接返回缓存的总结行数据
+   * Client 模式下, 直接同步实时计算
+   */
+  public getSummary(): Record<string, any> | null {
+    return this.summaryCache
   }
 
   public getTotalRows(): number {
@@ -120,9 +113,13 @@ export class ServerDataStrategy implements DataStrategy {
   private async loadPage(pageIndex: number): Promise<void> {
     try {
       const result = await this.fetchPageData(pageIndex, this.currentQuery)
-      // 适配统一的分页返回结构: IPageResponse: { list totalRows } 
+      // 适配统一的分页返回结构: IPageResponse: { list, totalRows, summary? } 
       this.pageCache.set(pageIndex, result.list)
       this.totalRows = result.totalRows
+      // 缓存总结行数据 (若后端返回了)
+      if (result.summary) {
+        this.summaryCache = result.summary
+      }
       
     } catch (err) {
       console.error(`[ServerDataStrategy] 加载第 ${pageIndex} 页失败:`, err)

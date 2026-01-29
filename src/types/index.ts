@@ -36,6 +36,7 @@ export interface ITableQuery {
 export interface IPageResponse<T = Record<string, any>> {
   list: T[]
   totalRows: number
+  summary?: Record<string, any> // 总结行数据(可选), 随分页数据一并返回
 }
 
 // server模式: 页码展示

@@ -140,7 +140,6 @@ export class VirtualTable {
         this.dataStrategy = new ServerDataStrategy(
           this.config.fetchPageData!,
           this.config.pageSize,
-          this.config.fetchSummaryData
         )
         // 创建 store
         this.store = createTableStore({
@@ -185,7 +184,7 @@ export class VirtualTable {
         this.resolveReady = null 
 
         // 后台开始拉取第 0 页, 让 totalRows 更新真实值, 并刷新 scroller/viewport
-        void this.dataStrategy.bootstrap().then( async ({ totalRows: realTotal }) => {
+        void this.dataStrategy.bootstrap().then(({ totalRows: realTotal }) => {
           // 只要 bootstrap 成功就执行, 不论 totalRows 是多少, 宽松管理
           const newTotal = typeof realTotal === 'number' ? realTotal : 0
           // 先判断是否需要重建 scroller, 在 修改 config 之前
@@ -210,20 +209,20 @@ export class VirtualTable {
           }
           this.viewport.updateVisibleRows() // 不能是 refresh() 哦!
           this.updateStatusBar() // 更新底部状态栏
-          
-          if (this.config.showSummary) {
-            await this.refreshSummary().catch(console.warn)
-          }
-
-          // 关键!!: 订阅 store 要等 bootstrap 和 refreshSummary 完成之后
+    
+          // 立即订阅 store
           this.unsubscribleStore?.()
           this.unsubscribleStore = this.store.subscribe((next, prev, action) => {
             this.handleStateChange(next, prev, action) 
           })
+
+           // 同步刷新总结行
+          if (this.config.showSummary) {
+            this.refreshSummary()
+          }
           
         }).catch(console.warn) 
 
-        
         return 
       }
 
@@ -309,7 +308,6 @@ export class VirtualTable {
     }
     // 1. 检查 store 是否已初始化
     if (!this.store) {
-      console.error('[VirtualTable] store 未初始化, 无法挂载表格!')
       throw new Error('[VirtualTable] mount() 必须在 store 初始化后调用!')
     }
 
@@ -492,9 +490,9 @@ export class VirtualTable {
       this.viewport.updateVisibleRows()
     }
    
-    // 首次挂载后, 立即刷新一次总结行数据, server 模式下要等 bootstrap 搞完再刷
+    // 首次挂载后, clinet 数据在内存, 直接更新汇总; 但server 模式下要等 bootstrap 搞完再刷
     if (this.config.showSummary && this.mode === 'client') {
-      this.refreshSummary().catch(console.warn)
+      this.refreshSummary()
     }
 
     // 最后显示默认面板 (使用微任务延迟,(可选)确保所有初始化完成)
@@ -622,6 +620,7 @@ export class VirtualTable {
     this.lifecycle.rebuild({
       applyColumnsFromState: () => this.applyColumnsFromState(),
       applyQuery: (query: ITableQuery) => this.applyQuery(query),
+      updateVisibleRows: () => this.viewport.updateVisibleRows(), 
       getMountParams: () => {
         // 准备 mount 所需参数
         const selector = this.config.container

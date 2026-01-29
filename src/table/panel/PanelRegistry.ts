@@ -27,7 +27,6 @@ export class PanelRegistry {
       throw new Error(`[PanelRegistry] 面板配置缺少必填字段: id, title, conponent`)
     }
     this.configs.set(config.id, config)
-    console.log(`[PanelRegistry] 注册面板: ${config.id}-${config.title}`)
   }
 
   // 批量注册多个面板
@@ -39,7 +38,6 @@ export class PanelRegistry {
   public unregister(id: string): boolean {
     const deleted = this.configs.delete(id)
     if (deleted) {
-      console.log(`[PanelRegistry] 注销面板: ${id}`)
     }
     return deleted
   }
@@ -78,7 +76,6 @@ export class PanelRegistry {
   // 清空所有注册的面板
   public clear(): void {
     this.configs.clear()
-    console.log('[PanelRegistry] 清空所有面板注册')
   }
   
 }

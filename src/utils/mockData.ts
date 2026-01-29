@@ -90,7 +90,19 @@ export async function mockFechPageData(
   const end = Math.min(start + pageSize, filteredTotalRows)
   const list = filtered.slice(start, end)
 
-  return { list, totalRows: filteredTotalRows }
+  // 6. 计算总结行数据 (只在第 0 页释藏计算, 避免重复计算)
+  let summary: Record<string, any> | undefined = undefined
+  if (pageIndex === 0) {
+    summary = {
+      'name': '合计',
+      id: filteredTotalRows,
+      sales: filtered.reduce((sum, row) => sum + (Number(row.sales) || 0), 0),
+      cost: filtered.reduce((sum, row) => sum + (Number(row.cost) || 0), 0),
+      profit: filtered.reduce((sum, row) => sum + (Number(row.profit) || 0), 0),
+    }
+  }
+
+  return { list, totalRows: filteredTotalRows, summary }
 }
 
 

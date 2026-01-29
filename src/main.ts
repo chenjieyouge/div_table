@@ -179,11 +179,7 @@ const configLarge: IUserConfig = {
     // 其他字段暂不支持 set 下拉框筛选
     return []
   },
-
-  fetchSummaryData(): Promise<Record<string, any>> {
-    return mockFechSummaryData()
-  },
-
+  
   sidePanel: {
     enabled: true,
     position: 'right',
@@ -243,13 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
     tableLarge.filter(input.value.trim())
   })
 
-  // 列顺序, 冻结列数
-  setTimeout(() => {
-    tableLarge.dispatch({
-      type: 'FROZEN_COUNT_SET',
-      payload: { count: 2 }
-    })
-  }, 1000);
   })
   
   // test-end ============

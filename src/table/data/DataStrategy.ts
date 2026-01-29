@@ -41,12 +41,13 @@ export interface DataStrategy {
   }>
 
   /**
-   * 获取总结行数据 
+   * 获取总结行数据 - 同步计算
+   * - client 模式: 实时计算
+   * - Server 模式: 返回缓存的总结行数据 (来自最近一次 applyQuery)
    * @param query - 当前查询条件, server 摸刷新需要
-   * @returns 总结行数据
+   * @returns 总结行数据, 若没有则为 null 
    */
-  getSummary(query: ITableQuery): Promise<Record<string, any> | null>
-
+  getSummary(): Record<string, any> | null  
   /**
    * 获取当前总行数 (同步)
    */
