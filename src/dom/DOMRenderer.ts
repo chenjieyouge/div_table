@@ -147,7 +147,7 @@ export class DOMRenderer {
         cell.appendChild(handle)
 
         // 列值筛选按钮 (配置了 filter 且 enabled 才能筛选 )
-        if (col.filter?.enabled) {
+        if (col.filter) {
           const filterBtn = document.createElement('div')
           filterBtn.className = 'col-filter-btn'
           filterBtn.dataset.columnKey = col.key
@@ -186,7 +186,7 @@ export class DOMRenderer {
       }
 
       // 每一列都会计算上 leftOffset, 但只有冻结列才添加上样式
-      leftOffset += col.width
+      leftOffset += col.width || 120
       row.appendChild(cell)
     })
   }
@@ -217,7 +217,7 @@ export class DOMRenderer {
     cell.appendChild(handle)
 
     // 添加-过滤图标
-    if (col.filter?.enabled) {
+    if (col.filter) {
       const filterBtn = document.createElement('div')
       filterBtn.className = 'col-filter-btn'
       filterBtn.dataset.columnKey = col.key

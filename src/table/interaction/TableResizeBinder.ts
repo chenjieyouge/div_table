@@ -34,7 +34,15 @@ export class TableResizeBinder {
       const onMove = (me: MouseEvent) => {
         const dx = me.clientX - startX // 移动距离
         // 最小表格宽度保护暂定 300, 后面拓展为初始配置即可
-        const next = Math.max(300, startWidth + dx) 
+        let next = Math.max(300, startWidth + dx) 
+
+        // 限制整表宽度拖拽按钮拖动超过可视区
+        if (this.layoutContainer) {
+          const parentWidth = this.layoutContainer.parentElement?.getBoundingClientRect().width || 0
+          const sidebarWidth = 0
+          const maxWidth = parentWidth - sidebarWidth
+          next = Math.min(next, maxWidth)
+        }
 
         // 同步更新 3个容器的宽度
         scrollContainer.style.width = `${next}px` 

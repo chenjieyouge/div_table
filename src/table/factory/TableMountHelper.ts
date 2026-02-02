@@ -174,6 +174,24 @@ export class MountHelper {
     // 大容器挂载上布局容器
     containerEl.appendChild(layoutContainer)
 
+    // 初始化时自动调整表格宽度, 消除垂直滚动条, 模拟拖拽列宽效果
+    requestAnimationFrame(() => {
+      const scrollContainer = layoutManager.getMainArea()?.querySelector<HTMLDivElement>('.table-container')
+
+      if (!scrollContainer) return
+      // 检查是否有垂直滚动条, 有则将表格宽度增加 1px 触发表格更新去覆盖调列滚动条    
+      if (scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+        // 获取当前布局容器宽度
+        const currentWidth = layoutContainer.getBoundingClientRect().width
+        const newWidth = currentWidth + 1
+        // 发现只要更新一下这个 portalContainer 宽度就可以了!
+        const portalContainer = scrollContainer.parentElement as HTMLDivElement
+        if (portalContainer) {
+          portalContainer.style.width = `${newWidth}px`
+        }
+      }
+    })
+
     // 获取主区域和侧边区域
     const mainArea = layoutManager.getMainArea()
     const sideArea = layoutManager.getSideArea()
